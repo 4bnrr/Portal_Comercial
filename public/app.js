@@ -61,7 +61,6 @@ function home(){
   const priced=available.filter(u=>Number(u.price)>0);
   const lowUnit=priced.slice().sort((a,b)=>Number(a.price)-Number(b.price))[0];
   const low=lowUnit?.price;
-  const trend=(priceHistory.summary||[]).filter(x=>Number(x.change)!==0).sort((a,b)=>Math.abs(Number(b.change))-Math.abs(Number(a.change))).slice(0,3);
   const syncOk=catalog.status==='ok'||catalog.status==='warning';
   return `
 <section class="hero hero-refined"><div class="container hero-grid hero-grid-refined"><div><div class="eyebrow">inteligência para a jornada comercial</div><h1>O ponto de partida para decisões imobiliárias mais claras.</h1><p>Consulte empreendimentos, unidades disponíveis, valores e condições em uma interface comercial simples e padronizada. Os dados são atualizados automaticamente pelo CVCRM.</p><div class="buttons"><a class="btn primary" href="#empreendimentos">Explorar empreendimentos →</a><a class="btn secondary" href="#simulador">▦ Simular entrada</a></div></div><aside class="hero-card hero-card-refined"><div class="eyebrow">painel comercial</div><h2>Informação comercial clara e centralizada.</h2><div class="hero-list"><div><b>Tabelas e unidades</b><small>Somente disponibilidade comercial atual.</small></div><div><b>Simulação comercial</b><small>Entrada estimada por unidade disponível.</small></div><div><b>Atualização automática</b><small>Dados sincronizados periodicamente com o CVCRM.</small></div></div></aside></div></section>
@@ -71,7 +70,6 @@ function home(){
     <div class="metric"><label>Unidades disponíveis</label><strong>${available.length}</strong><p>Situação atual = Disponível.</p></div>
     <div class="metric"><label>Menor valor</label><strong>${fmtBRL(low)}</strong><p>${lowUnit?escapeHtml(enterpriseDisplayName(lowUnit.enterpriseName)):'Sem preço disponível'}</p></div>
   </div>
-  ${trend.length?`<div class="home-trends"><div class="section-title"><div><div class="eyebrow">histórico de preços</div><h2>Alterações recentes</h2></div></div><div class="trend-grid">${trend.map(t=>`<div class="trend-card"><span>${escapeHtml(enterpriseDisplayName(t.enterpriseName))}</span><b>${fmtBRL(t.latestPrice)}</b><small class="${t.change<0?'trend-down':'trend-up'}">${t.change<0?'↓':'↑'} ${fmtBRL(Math.abs(t.change))} desde a leitura anterior</small></div>`).join('')}</div></div>`:''}
 </div></section>`}
 
 function visibleEnterprises(){return catalog.enterprises.filter(e=>!isHiddenEnterprise(e.name)&&enterpriseMedia(e.name).visible&&Number(e.availableUnits)>0)}
