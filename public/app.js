@@ -523,7 +523,6 @@ function printSimulation(){
     const typology=category
       ? category.charAt(0).toUpperCase()+category.slice(1).replace('-', ' ')
       : (r.unit?.developmentType?.toLowerCase().includes('casa')?'Casa':'—');
-    const entryPct=r.sale?Math.max(0,(r.entry/r.sale)*100):0;
     return `<tr>
       <td>${String(i+1).padStart(2,'0')}</td>
       <td><b>${escapeHtml(r.unit?.enterpriseName||'—')}</b></td>
@@ -532,7 +531,7 @@ function printSimulation(){
       <td>${r.appraisal?fmtBRL(r.appraisal):'—'}</td>
       <td>${fmtBRL(r.financingEffective)}</td>
       <td><b>${fmtBRL(r.entry)}</b></td>
-      <td>${entryPct.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</td>
+      <td>${fmtBRL(r.subsidy)}</td>
     </tr>`;
   }).join('');
 
@@ -570,7 +569,7 @@ function printSimulation(){
           <th>Avaliação</th>
           <th>Financ. efetivo</th>
           <th>Entrada</th>
-          <th>% entrada</th>
+          <th>Subsídio</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -615,7 +614,7 @@ function renderPaymentPlan(){
   const status=blocked?'OPERAÇÃO BLOQUEADA':r.status;
   const ownMsg=r.ownResourcesMinimum>0?`O cliente deverá pagar no mínimo ${fmtBRL(r.ownResourcesMinimum)} com recursos próprios. O saldo poderá ser estruturado dentro da capacidade do Plano de Pagamento.`:'A entrada gerada está integralmente dentro da capacidade do Plano de Pagamento.';
   const fixed=rule.remunerationType==='fixed';
-  area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(u.enterpriseName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(u.enterpriseName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento aprovado</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?'A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de 13,5%.':escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
+  area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(u.enterpriseName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(u.enterpriseName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento + Subsídio</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?'A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de 13,5%.':escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
 }
 
 function printPaymentPlan(){
