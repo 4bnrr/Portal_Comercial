@@ -3,7 +3,12 @@ node_modules/
 logs/*.log
 data/cache.json
 data/raw-cvcrm-last.json
+data/raw-tabelas-detalhadas-last.json
+data/cvcrm-integrity.json
+data/cvcrm-rate-limit.json
 data/history.json
 data/materials.json
+data/price-history.json
+data/backups/
 data/uploads/*
 !data/uploads/.gitkeep

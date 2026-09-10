@@ -57,13 +57,26 @@ fs.mkdirSync(BACKUP_DIR, { recursive: true });
 fs.mkdirSync(ENTERPRISE_IMAGE_DIR, { recursive: true });
 
 const emptyCache = { lastSync: null, lastSuccess: null, status: 'not_configured', error: null, enterprises: [], units: [], stats: {} };
+const jsonCache = new Map();
 function readJson(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+  try {
+    const stat = fs.statSync(file);
+    const cached = jsonCache.get(file);
+    if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.value;
+    const value = JSON.parse(fs.readFileSync(file, 'utf8'));
+    jsonCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value });
+    return value;
+  } catch {
+    jsonCache.delete(file);
+    return fallback;
+  }
 }
 function writeJson(file, value) {
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
   fs.renameSync(tmp, file);
+  const stat = fs.statSync(file);
+  jsonCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value });
 }
 if (!fs.existsSync(CACHE_FILE)) writeJson(CACHE_FILE, emptyCache);
 if (!fs.existsSync(MATERIALS_FILE)) writeJson(MATERIALS_FILE, []);
@@ -1111,14 +1124,20 @@ const uploadEnterpriseImage = multer({
 });
 
 app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(UPLOAD_DIR));
+app.use('/uploads', express.static(UPLOAD_DIR, {
+  etag: true,
+  lastModified: true,
+  maxAge: '1d',
+}));
 app.use(express.static(path.join(__dirname, 'public'), {
-  etag: false,
-  lastModified: false,
-  setHeaders(res) {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+  etag: true,
+  lastModified: true,
+  setHeaders(res, filePath) {
+    if (path.basename(filePath) === 'index.html') {
+      res.setHeader('Cache-Control', 'no-cache');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
   }
 }));
 

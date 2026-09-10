@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tests-payment-plan.mjs"
   },
   "dependencies": {
     "dotenv": "^17.2.2",
