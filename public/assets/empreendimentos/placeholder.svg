@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f5f6f8"/><stop offset="1" stop-color="#e4e7eb"/></linearGradient></defs>
+<rect width="1200" height="700" fill="url(#g)"/>
+<rect x="510" y="215" width="180" height="180" rx="24" fill="#ef0014"/>
+<text x="600" y="350" text-anchor="middle" font-family="Arial" font-size="150" font-weight="800" fill="white">1</text>
+<text x="600" y="470" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700" fill="#25282d">Estação 1</text>
+</svg>

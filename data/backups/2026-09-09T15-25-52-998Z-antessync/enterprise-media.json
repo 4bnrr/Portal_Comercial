@@ -1,0 +1,99 @@
+{
+  "sandaloresidence": {
+    "sourceName": "Sândalo Residence",
+    "displayName": "Sândalo Residence",
+    "image": "/assets/empreendimentos/sandalo-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/sandalo-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "acquaventureamerica": {
+    "sourceName": "Acqua Venture América",
+    "displayName": "Acqua Venture América",
+    "image": "/assets/empreendimentos/acqua-venture-america.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/acqua-venture-america/",
+    "visible": true,
+    "highlights": []
+  },
+  "acquaventureeuropaii": {
+    "sourceName": "Acqua Venture Europa II",
+    "displayName": "Acqua Venture Europa II",
+    "image": "/assets/empreendimentos/acqua-venture-europa-2.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/acqua-venture-europa-2/",
+    "visible": true,
+    "highlights": []
+  },
+  "amorasresidence": {
+    "sourceName": "Amoras Residence",
+    "displayName": "Amoras Residence",
+    "image": "/assets/empreendimentos/amoras-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/amoras-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "asterresidence": {
+    "sourceName": "Aster Residence",
+    "displayName": "Aster Residence",
+    "image": "/assets/empreendimentos/aster-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/aster-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "jasminresidence": {
+    "sourceName": "Jasmim Residence",
+    "displayName": "Jasmim Residence",
+    "image": "/assets/empreendimentos/jasmim-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/jasmim-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "jasmimresidence": {
+    "sourceName": "Jasmim Residence",
+    "displayName": "Jasmim Residence",
+    "image": "/assets/empreendimentos/jasmim-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/jasmim-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "blendpapagaio": {
+    "sourceName": "Blend Papagaio",
+    "displayName": "Blend Papagaio",
+    "image": "/assets/empreendimentos/blend-papagaio.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/blend-papagaio/",
+    "visible": true,
+    "highlights": [],
+    "updatedAt": "2026-09-09T15:09:37.398Z"
+  },
+  "lirio residence": {
+    "sourceName": "Lirio Residence",
+    "displayName": "Lirio Residence",
+    "image": "/assets/empreendimentos/lirio-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/lirio-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "lirioresidence": {
+    "sourceName": "Lirio Residence",
+    "displayName": "Lirio Residence",
+    "image": "/assets/empreendimentos/lirio-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/lirio-residence/",
+    "visible": true,
+    "highlights": []
+  },
+  "atlantaresidencepark2": {
+    "sourceName": "Atlanta Residence Park 2",
+    "displayName": "Atlanta Residence Park 2",
+    "image": "/assets/empreendimentos/atlanta-residence-park-2.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/atlanta-residence-park/",
+    "visible": true,
+    "highlights": []
+  },
+  "atlantaresidenceparkii": {
+    "sourceName": "Atlanta Residence Park II",
+    "displayName": "Atlanta Residence Park II",
+    "image": "/assets/empreendimentos/atlanta-residence-park-2.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/atlanta-residence-park/",
+    "visible": true,
+    "highlights": []
+  }
+}

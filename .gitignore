@@ -1,0 +1,9 @@
+node_modules/
+.env
+logs/*.log
+data/cache.json
+data/raw-cvcrm-last.json
+data/history.json
+data/materials.json
+data/uploads/*
+!data/uploads/.gitkeep

@@ -1,0 +1,65 @@
+[
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "86",
+    "enterpriseName": "Acqua Venture América",
+    "lowestPrice": 182990,
+    "availableUnits": 80
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "80",
+    "enterpriseName": "Acqua Venture Europa II",
+    "lowestPrice": 190990,
+    "availableUnits": 22
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "84",
+    "enterpriseName": "Aster Residence",
+    "lowestPrice": 190990,
+    "availableUnits": 245
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "79",
+    "enterpriseName": "Atlanta Residence Park",
+    "lowestPrice": 189990,
+    "availableUnits": 5
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "115",
+    "enterpriseName": "Atlanta Residence Park II",
+    "lowestPrice": 215990,
+    "availableUnits": 118
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "81",
+    "enterpriseName": "Blend Papagaio",
+    "lowestPrice": 189990,
+    "availableUnits": 70
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "85",
+    "enterpriseName": "Jasmim Residence",
+    "lowestPrice": 179990,
+    "availableUnits": 109
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "53",
+    "enterpriseName": "Lirio Residence",
+    "lowestPrice": 186990,
+    "availableUnits": 38
+  },
+  {
+    "at": "2026-09-09T15:02:59.132Z",
+    "enterpriseId": "116",
+    "enterpriseName": "Sândalo Residence",
+    "lowestPrice": 179990,
+    "availableUnits": 84
+  }
+]

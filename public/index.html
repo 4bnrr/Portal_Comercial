@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ef0014" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Estação 1 | Portal Comercial</title>
+  <link rel="stylesheet" href="/styles.css?v=22.1" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#inicio" aria-label="Estação 1">
+        <img src="/assets/logo-estacao1.png?v=7.0" alt="Estação 1" class="brand-logo" />
+        <span class="brand-copy">
+          <strong>Estação 1</strong>
+          <small>Portal Comercial</small>
+        </span>
+      </a>
+      <button id="menuBtn" class="menu-btn" aria-label="Abrir menu">☰</button>
+      <nav id="nav">
+        <a data-route="inicio" href="#inicio">Início</a>
+        <a data-route="empreendimentos" href="#empreendimentos">Empreendimentos</a>
+        <a data-route="tabelas" href="#tabelas">Tabelas de preços</a>
+        <a data-route="simulador" href="#simulador">Simulador</a><a data-route="administracao" href="#administracao">Administração</a>
+      </nav>
+      <div class="sync-pill" id="headerStatus"><span></span>Carregando</div>
+    </div>
+  </header>
+  <main id="app"></main>
+  <footer>
+    <div class="footer-inner">
+      <strong>Estação 1</strong>
+      <span>Portal comercial • Dados sincronizados automaticamente via CVCRM</span>
+    </div>
+  </footer>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="/app.js?v=22.1"></script>
+</body>
+</html>

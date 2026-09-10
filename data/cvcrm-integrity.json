@@ -1,0 +1,32 @@
+{
+  "at": "2026-09-09T18:36:04.137Z",
+  "endpoints": {
+    "unidades": {
+      "records": 14451,
+      "ok": true
+    },
+    "situacao": {
+      "records": 41545,
+      "ok": true
+    },
+    "precos": {
+      "records": 5927,
+      "ok": true
+    }
+  },
+  "allEnterpriseCount": 11,
+  "commercialEnterpriseCount": 10,
+  "commercialUnitCount": 943,
+  "availableCount": 943,
+  "availableWithPriceCount": 943,
+  "availableWithoutPriceCount": 0,
+  "statusCounts": {
+    "disponivel": 943
+  },
+  "warnings": [],
+  "appraisals": {
+    "enterprisesRequested": 34,
+    "enterprisesOk": 34,
+    "unitsWithAppraisal": 943
+  }
+}
