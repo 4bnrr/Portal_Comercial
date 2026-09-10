@@ -530,8 +530,8 @@ function printSimulation(){
       <td>${fmtBRL(r.sale)}</td>
       <td>${r.appraisal?fmtBRL(r.appraisal):'—'}</td>
       <td>${fmtBRL(r.financingEffective)}</td>
-      <td><b>${fmtBRL(r.entry)}</b></td>
       <td>${fmtBRL(r.subsidy)}</td>
+      <td><b>${fmtBRL(r.entry)}</b></td>
     </tr>`;
   }).join('');
 
@@ -568,8 +568,8 @@ function printSimulation(){
           <th>Valor</th>
           <th>Avaliação</th>
           <th>Financ. efetivo</th>
-          <th>Entrada</th>
           <th>Subsídio</th>
+          <th>Entrada</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
