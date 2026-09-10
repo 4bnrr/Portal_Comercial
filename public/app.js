@@ -475,7 +475,7 @@ function renderSimulationComparison(indices){
         <div><dt>Financiamento</dt><dd>${fmtBRL(r.financingEffective)}</dd></div>
         <div><dt>Subsídio</dt><dd>${fmtBRL(r.subsidy)}</dd></div>
       </dl>
-      ${url?`<div class="comparison-qr"><img src="/api/qr?text=${encodeURIComponent(url)}" alt="QR Code"><small>Abrir empreendimento</small></div>`:''}
+      ${url?`<div class="comparison-qr"><img src="/api/qr?text=${encodeURIComponent(url)}" alt="QR Code"><a href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir empreendimento</a></div>`:''}
     </article>`;
   }).join('')}</div></section>`;
 }
