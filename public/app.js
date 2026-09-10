@@ -671,7 +671,7 @@ function printPaymentPlan(){
     <div class="print-grid plan-print-grid">
       <div><span>Valor do imóvel</span><b>${fmtBRL(r.sale)}</b></div>
       <div><span>Valor da avaliação</span><b>${fmtBRL(r.appraisal)}</b></div>
-      <div><span>Financiamento aprovado</span><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div>
+      <div><span>Financiamento + Subsídio</span><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div>
       <div><span>Financiamento efetivo</span><b>${fmtBRL(r.financingEffective)}</b></div>
       <div><span>Subsídio</span><b>${fmtBRL(r.subsidy)}</b></div>
       <div><span>Entrada gerada</span><b>${fmtBRL(r.entryRequired)}</b></div>
