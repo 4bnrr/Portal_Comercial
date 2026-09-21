@@ -2430,23 +2430,35 @@ main{
   .sim-results-below .sim-result-entry-highlight small{font-size:7px}
   .sim-results-below .sim-result-entry-highlight strong{
     margin-top:0;
-    font-size:15px!important;
+    max-width:100%;
+    overflow:hidden;
+    font-size:clamp(12px,3.65vw,15px)!important;
+    letter-spacing:-.045em;
+    white-space:nowrap;
   }
   .sim-results-below .sim-result-grid{
-    margin:0 8px 0 12px;
+    margin:0 7px 0 10px;
   }
   .sim-results-below .sim-result-grid>div,
   .sim-results-below .sim-result-grid>div:nth-child(even){
     min-height:45px;
-    padding:6px 2px 5px 0;
+    padding:6px 2px 5px 0!important;
   }
-  .sim-results-below .sim-result-grid>div:nth-child(even){padding-left:5px}
+  .sim-results-below .sim-result-grid>div:nth-child(even){padding-left:5px!important}
   .sim-results-below .sim-result-grid small{
     margin-bottom:2px;
     font-size:6.5px;
     line-height:1.08;
   }
-  .sim-results-below .sim-result-grid b{font-size:8.5px;line-height:1.1}
+  .sim-results-below .sim-result-grid b{
+    display:block;
+    max-width:100%;
+    overflow:hidden;
+    font-size:clamp(6.75px,2vw,8px);
+    line-height:1.1;
+    letter-spacing:-.045em;
+    white-space:nowrap;
+  }
   .sim-results-below .sim-warning,
   .sim-results-below .sim-ok{
     display:-webkit-box;
