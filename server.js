@@ -572,6 +572,42 @@ function lookupDetailedAppraisal(index, row) {
   return null;
 }
 
+function collectVertexDashboardRows(payload) {
+  const index = new Map();
+  const walk = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 12) return;
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child, depth + 1);
+      return;
+    }
+
+    const tableName = textValue(pick(node, ['tabela','nome_tabela','nometabela']));
+    const rows = Array.isArray(node.dados) ? node.dados : null;
+    if (rows && normKey(tableName).includes('vertexgetulio') && normKey(tableName).includes('dashboard')) {
+      for (const row of rows) {
+        const detail = {
+          price: extractPrice(row),
+          status: deriveStatus(row),
+          tableName,
+        };
+        for (const key of detailedUnitKeys(row)) index.set(key, detail);
+      }
+    }
+
+    for (const child of Object.values(node)) if (child && typeof child === 'object') walk(child, depth + 1);
+  };
+  walk(payload);
+  return index;
+}
+
+function lookupVertexDashboard(index, row) {
+  if (!index) return null;
+  for (const key of detailedUnitKeys(row)) {
+    if (index.has(key)) return index.get(key);
+  }
+  return null;
+}
+
 async function fetchDetailedAppraisals(unitsRows) {
   const excluded = new Set(['araca','lantai']);
   const enterprises = new Map();
@@ -583,6 +619,7 @@ async function fetchDetailedAppraisals(unitsRows) {
   }
 
   const perEnterprise = new Map();
+  const vertexDashboard = new Map();
   const diagnostics = [];
   let position = 0;
   for (const enterprise of [...enterprises.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))) {
@@ -601,6 +638,9 @@ async function fetchDetailedAppraisals(unitsRows) {
       const payload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
       const parsed = collectDetailedUnitAppraisals(payload);
       perEnterprise.set(String(enterprise.id), parsed.index);
+      if (enterprise.id === '121' || normKey(enterprise.name).includes('vertexgetulio')) {
+        for (const [key, value] of collectVertexDashboardRows(payload)) vertexDashboard.set(key, value);
+      }
       diagnostics.push({
         enterpriseId: enterprise.id,
         enterpriseName: enterprise.name,
@@ -624,7 +664,7 @@ async function fetchDetailedAppraisals(unitsRows) {
   // Guardamos a resposta detalhada para diagnóstico, mas limitamos cada payload a
   // uma serialização completa apenas nesta fonte auxiliar; o arquivo não é servido publicamente.
   try { writeJson(DETAILED_TABLE_RAW_FILE, { at: new Date().toISOString(), enterprises: diagnostics }); } catch {}
-  return { perEnterprise, diagnostics };
+  return { perEnterprise, vertexDashboard, diagnostics };
 }
 
 function unitKey(row) {
@@ -765,40 +805,72 @@ function bestPriceByUnit(rows) {
   }
   return alias;
 }
-function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null) {
+function isVertexUnit(row) {
+  return enterpriseKey(row) === '121' || normKey(enterpriseName(row)).includes('vertexgetulio');
+}
+function vertexFloorLabel(row) {
+  let floor = intValue(pick(row, ['andar','pavimento']));
+  if (floor === null) {
+    const unitNumber = intValue(pick(row, ['nome','unidade','numero_unidade','numerounidade']));
+    if (unitNumber !== null && unitNumber >= 1) floor = unitNumber <= 99 ? 0 : Math.floor(unitNumber / 100);
+  }
+  if (floor === null) return textValue(pick(row, ['tipologia']), 'Andar não informado');
+  return floor === 0 ? 'Térreo' : `${floor}º andar`;
+}
+function vertexCommercialType(row) {
+  const raw = normKey(pick(row, [
+    'tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade'
+  ]));
+  return raw.includes('varanda') ? 'Com varanda' : 'Padrão';
+}
+function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, vertexDashboardRow = null) {
   const combined = { ...baseRow, ...situationRow, ...priceRow };
-  const statusSource = Object.keys(situationRow).length ? situationRow : baseRow;
-  const eId = enterpriseKey(combined) || enterpriseName(combined);
-  const id = unitKey(combined) || crypto.createHash('sha1').update(JSON.stringify(baseRow)).digest('hex').slice(0,14);
-  const price = extractPrice(priceRow) ?? extractPrice(baseRow);
+  // Exceção comercial controlada: no Vertex, situação e preço complementam a
+  // unidade, mas nunca podem trocar sua identidade de empreendimento/unidade.
+  const identitySource = isVertexUnit(baseRow) ? baseRow : combined;
+  // A API /unidades/situacao é histórica. Para empreendimentos/unidades recém-criados,
+  // pode existir uma linha de situação sem um estado atual reconhecível. Nesse caso,
+  // não devemos transformar a unidade em "indisponivel" e descartá-la do catálogo:
+  // usamos a situação atual informada pela própria linha de /unidades como fallback.
+  const hasSituationRow = Object.keys(situationRow).length > 0;
+  const situationStatus = hasSituationRow ? deriveStatus(situationRow) : null;
+  const baseStatus = deriveStatus(baseRow);
+  const resolvedStatus = hasSituationRow && situationStatus !== 'indisponivel'
+    ? situationStatus
+    : baseStatus;
+  const statusSource = hasSituationRow && situationStatus !== 'indisponivel' ? situationRow : baseRow;
+  const eId = enterpriseKey(identitySource) || enterpriseName(identitySource);
+  const id = unitKey(identitySource) || crypto.createHash('sha1').update(JSON.stringify(baseRow)).digest('hex').slice(0,14);
+  const price = vertexDashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow);
 
   return {
     id,
-    internalId: textValue(pick(combined, ['idunidade_int'])),
+    internalId: textValue(pick(identitySource, ['idunidade_int'])),
     enterpriseId: eId,
-    enterpriseInternalId: textValue(pick(combined, ['idempreendimento_int'])),
-    enterpriseName: enterpriseName(combined),
-    code: textValue(pick(combined, ['idunidade_int','codigo','codigo_unidade','unidade','nome']), id),
-    developmentType: textValue(pick(combined, ['tipo_empreendimento'])),
-    typology: textValue(pick(combined, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
-    stage: textValue(pick(combined, ['etapa'])),
-    bedrooms: intValue(pick(combined, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
-    suites: intValue(pick(combined, ['qtde_suites','suites','suítes','quantidade_suites'])),
-    tower: textValue(pick(combined, ['bloco','torre','nome_bloco','nomebloco','bloco_nome'])),
-    floor: intValue(pick(combined, ['andar','pavimento'])),
-    area: numberValue(pick(combined, ['area_privativa','areaprivativa','area_privativa_total','area_total','areatotal','area'])),
-    parkingSpaces: intValue(pick(combined, ['vagas_garagem','qtde_vagas_garagem','vagas','vagasgaragem','quantidade_vagas'])),
+    enterpriseInternalId: textValue(pick(identitySource, ['idempreendimento_int'])),
+    enterpriseName: enterpriseName(identitySource),
+    code: textValue(pick(identitySource, ['idunidade_int','codigo','codigo_unidade','unidade','nome']), id),
+    developmentType: textValue(pick(identitySource, ['tipo_empreendimento'])),
+    typology: isVertexUnit(baseRow) ? vertexFloorLabel(baseRow) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
+    commercialType: isVertexUnit(baseRow) ? vertexCommercialType(baseRow) : '',
+    stage: textValue(pick(identitySource, ['etapa'])),
+    bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
+    suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),
+    tower: textValue(pick(identitySource, ['bloco','torre','nome_bloco','nomebloco','bloco_nome'])),
+    floor: intValue(pick(identitySource, ['andar','pavimento'])),
+    area: numberValue(pick(identitySource, ['area_privativa','areaprivativa','area_privativa_total','area_total','areatotal','area'])),
+    parkingSpaces: intValue(pick(identitySource, ['vagas_garagem','qtde_vagas_garagem','vagas','vagasgaragem','quantidade_vagas'])),
     price,
     appraisal: detailedAppraisal ?? numberValue(pick(combined, ['VALOR DO IMÓVEL (1x)','VALOR DO IMOVEL (1x)','valor_do_imovel_1x','valor_imovel_1x','valordoimovel1x','valor_imovel','valor do imovel','valor do imóvel','valor_avaliacao','valoravaliacao','avaliacao','valor_de_avaliacao'])),
-    status: deriveStatus(statusSource),
+    status: vertexDashboardRow?.status || resolvedStatus,
     statusReason: textValue(pick(statusSource, ['situacao_bloqueada_motivo','situacao_reservada_nomesituacao','motivo'])),
-    tableName: textValue(pick(priceRow, ['tabela','tabela_preco','tabelapreco','nome_tabela','nometabela','tabela_preco_nome'])),
-    hasSituation: Object.keys(situationRow).length > 0,
+    tableName: textValue(vertexDashboardRow?.tableName || pick(priceRow, ['tabela','tabela_preco','tabelapreco','nome_tabela','nometabela','tabela_preco_nome'])),
+    hasSituation: hasSituationRow,
     hasPrice: price !== null && price > 0,
     updatedAt: textValue(pick(statusSource, ['referencia_data','data_referencia','datareferencia','updated_at','atualizado_em']), new Date().toISOString()),
   };
 }
-function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map()) {
+function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), vertexDashboard = new Map()) {
   const situationIndex = latestByUnit(situationRows);
   const priceIndex = bestPriceByUnit(priceRows);
   const allUnits = unitsRows.map(row => {
@@ -807,7 +879,8 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
       row,
       lookupUnit(situationIndex, row),
       lookupUnit(priceIndex, row),
-      lookupDetailedAppraisal(enterpriseAppraisals, row)
+      lookupDetailedAppraisal(enterpriseAppraisals, row),
+      isVertexUnit(row) ? lookupVertexDashboard(vertexDashboard, row) : null
     );
   });
 
@@ -916,7 +989,7 @@ async function syncCvcrm(trigger = 'manual') {
   let unitsRows = [];
   let situationRows = [];
   let priceRows = [];
-  let appraisalData = { perEnterprise: new Map(), diagnostics: [] };
+  let appraisalData = { perEnterprise: new Map(), vertexDashboard: new Map(), diagnostics: [] };
 
   try {
     await respectPersistentCooldown();
@@ -955,7 +1028,7 @@ async function syncCvcrm(trigger = 'manual') {
       retryWaitSeconds: null,
     });
 
-    const merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise);
+    const merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.vertexDashboard);
     const appraisalErrors = appraisalData.diagnostics.filter(d => !d.ok).map(d => ({ endpoint: `tabela detalhada ${d.enterpriseName}`, message: d.error }));
     const integrity = buildIntegrity(unitsRows, situationRows, priceRows, merged, appraisalErrors);
     integrity.appraisals = {

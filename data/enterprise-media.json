@@ -58,11 +58,11 @@
   "blendpapagaio": {
     "sourceName": "Blend Papagaio",
     "displayName": "Blend Papagaio",
-    "image": "/assets/empreendimentos/blend-papagaio.jpg",
+    "image": "/assets/empreendimentos/blendpapagaio-1790012821290.jpg",
     "url": "https://estacao1construtora.com.br/imovel/blend-papagaio/",
     "visible": true,
     "highlights": [],
-    "updatedAt": "2026-09-09T15:09:37.398Z"
+    "updatedAt": "2026-09-21T17:47:01.354Z"
   },
   "lirio residence": {
     "sourceName": "Lirio Residence",
@@ -75,10 +75,11 @@
   "lirioresidence": {
     "sourceName": "Lirio Residence",
     "displayName": "Lirio Residence",
-    "image": "/assets/empreendimentos/lirio-residence.jpg",
+    "image": "/assets/empreendimentos/lirioresidence-1790012894843.jpg",
     "url": "https://estacao1construtora.com.br/imovel/lirio-residence/",
     "visible": true,
-    "highlights": []
+    "highlights": [],
+    "updatedAt": "2026-09-21T17:48:14.887Z"
   },
   "atlantaresidencepark2": {
     "sourceName": "Atlanta Residence Park 2",
@@ -95,5 +96,16 @@
     "url": "https://estacao1construtora.com.br/imovel/atlanta-residence-park/",
     "visible": true,
     "highlights": []
+  },
+  "vertexgetulio": {
+    "sourceName": "- Vertex Getulio",
+    "displayName": "Vertex Getúlio",
+    "image": "/assets/empreendimentos/vertex-getulio.jpg?v=1",
+    "url": "",
+    "visible": true,
+    "highlights": [
+      "Lançamento"
+    ],
+    "updatedAt": "2026-09-21T16:38:38.972Z"
   }
 }
