@@ -2125,3 +2125,169 @@ main{
   .sim-results-below .sim-card-actions .btn{padding-inline:12px}
   .plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* V22.13 — quadrantes mobile sem rolagem lateral */
+@media(max-width:700px){
+  .hero-card-refined .hero-list{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    overflow:visible;
+    scroll-snap-type:none;
+  }
+  .hero-card-refined .hero-list>div{
+    min-width:0;
+    flex:none;
+    padding:14px 0;
+  }
+  .hero-card-refined .hero-list>div:last-child:nth-child(odd){grid-column:1/-1}
+
+  .home-dashboard .metrics-dashboard{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    overflow:visible;
+    padding:0;
+    scroll-snap-type:none;
+  }
+  .home-dashboard .metrics-dashboard .metric{
+    min-width:0;
+    min-height:138px!important;
+    padding:18px;
+    flex:none;
+  }
+  .home-dashboard .metrics-dashboard .metric:last-child:nth-child(odd){grid-column:1/-1!important}
+  .home-dashboard .metrics-dashboard .metric strong{font-size:31px}
+  .home-dashboard .metrics-dashboard .metric p{font-size:11px}
+
+  .table-wrap-refined{
+    overflow:visible;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    box-shadow:none;
+  }
+  .price-table{
+    display:block;
+    width:100%;
+    min-width:0;
+    background:transparent;
+  }
+  .price-table>thead{display:none}
+  .price-table>tbody{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    width:100%;
+  }
+  .price-table>tbody>tr:not(.vertex-detail-row){
+    display:flex;
+    min-width:0;
+    min-height:248px;
+    padding:14px;
+    flex-direction:column;
+    border:1px solid var(--line);
+    border-radius:16px;
+    overflow:hidden;
+    background:#fff;
+    box-shadow:0 8px 22px rgba(20,24,31,.045);
+  }
+  .table-wrap-refined .price-table>tbody>tr:not(.vertex-detail-row)>td{
+    display:block;
+    width:100%;
+    padding:7px 0;
+    border:0;
+    background:transparent!important;
+    text-align:left!important;
+    white-space:normal;
+  }
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:first-child{
+    min-height:55px;
+    padding-top:0;
+    font-size:13px;
+    line-height:1.25;
+  }
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:nth-child(2)::before,
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:nth-child(3)::before,
+  .vertex-detail-table td:nth-child(2)::before,
+  .vertex-detail-table td:nth-child(3)::before{
+    display:block;
+    margin-bottom:3px;
+    color:var(--muted);
+    font-size:9px;
+    font-weight:800;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+  }
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:nth-child(2)::before,
+  .vertex-detail-table td:nth-child(2)::before{content:"Venda"}
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:nth-child(3)::before,
+  .vertex-detail-table td:nth-child(3)::before{content:"Avaliação"}
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:nth-child(2) b,
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:nth-child(3) b{
+    font-size:14px;
+    white-space:nowrap;
+  }
+  .price-table>tbody>tr:not(.vertex-detail-row)>td:last-child{
+    margin-top:auto;
+    padding-bottom:0;
+  }
+  .table-wrap-refined .price-table>tbody>tr:not(.vertex-detail-row) .btn{
+    width:100%;
+    min-width:0;
+    min-height:39px;
+    padding:8px 6px;
+    font-size:10px;
+  }
+
+  .price-table>tbody>.vertex-detail-row{
+    display:block;
+    grid-column:1/-1;
+    min-width:0;
+  }
+  .price-table>tbody>.vertex-detail-row[hidden]{display:none}
+  .price-table>tbody>.vertex-detail-row>td{
+    display:block;
+    width:100%;
+    padding:0!important;
+    border:0;
+  }
+  .vertex-detail-panel{padding:14px}
+  .vertex-detail-heading{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:4px;
+  }
+  .vertex-detail-table-wrap{overflow:visible}
+  .vertex-detail-table{
+    display:block;
+    width:100%;
+    min-width:0;
+  }
+  .vertex-detail-table thead{display:none}
+  .vertex-detail-table tbody{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:9px;
+  }
+  .vertex-detail-table tr{
+    display:flex;
+    min-width:0;
+    padding:11px;
+    flex-direction:column;
+    border:1px solid var(--line);
+    border-radius:13px;
+    background:#fff;
+  }
+  .vertex-detail-table td{
+    display:block;
+    width:100%;
+    padding:5px 0!important;
+    border:0!important;
+    background:transparent!important;
+    text-align:left!important;
+  }
+  .vertex-detail-table td:first-child{min-height:35px;font-size:12px}
+  .vertex-detail-table td:nth-child(2) b,
+  .vertex-detail-table td:nth-child(3) b{font-size:12px;white-space:nowrap}
+  .vertex-detail-table td:last-child{margin-top:auto}
+  .vertex-detail-table .btn{width:100%;min-height:36px;padding:7px 5px;font-size:10px}
+}
