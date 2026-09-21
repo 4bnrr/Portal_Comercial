@@ -14,6 +14,7 @@ let enterpriseMediaConfig = {};
 let priceHistory = { rows: [], summary: [] };
 let adminEnterpriseData = { entries: [], pending: [] };
 let backups = [];
+let readOnlyPortal = false;
 
 
 const fmtBRL = value => value == null || Number.isNaN(Number(value)) ? '—' : Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -30,7 +31,9 @@ async function loadAll(){
     api('/api/price-history')
   ]);
   try{catalog={...catalog,...await api('/api/status')}}catch{}
-  try{[adminEnterpriseData,backups]=await Promise.all([api('/api/admin/enterprises'),api('/api/backups')])}catch{}
+  readOnlyPortal=Boolean(catalog.readOnly);
+  if(readOnlyPortal)document.querySelector('nav a[data-route="administracao"]')?.remove();
+  if(!readOnlyPortal){try{[adminEnterpriseData,backups]=await Promise.all([api('/api/admin/enterprises'),api('/api/backups')])}catch{}}
   updateHeader();
 }
 function updateHeader(){
@@ -888,7 +891,11 @@ function updates(){
 }
 const pages={inicio:home,empreendimentos:enterprises,tabelas:tables,simulador:simulator,administracao:administration};
 async function route(){
-  const name=(location.hash||'#inicio').slice(1).split('?')[0];
+  let name=(location.hash||'#inicio').slice(1).split('?')[0];
+  if(readOnlyPortal&&name==='administracao'){
+    name='inicio';
+    window.history.replaceState(null,'','#inicio');
+  }
   document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.dataset.route===name));
   if(name==='administracao')await checkAdminAuth();
   app.innerHTML=(pages[name]||home)();

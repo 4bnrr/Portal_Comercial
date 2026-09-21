@@ -1233,6 +1233,7 @@ app.get('/api/status', (_, res) => {
   const rateLimit = readRateLimitState();
   const blockedUntilMs = rateLimit.blockedUntil ? Date.parse(rateLimit.blockedUntil) : 0;
   res.json({
+    readOnly: IS_VERCEL,
     configured: configured(),
     syncing,
     syncProgress,
@@ -1243,7 +1244,7 @@ app.get('/api/status', (_, res) => {
     },
     domain: process.env.CVCRM_DOMAIN || null,
     autoSync: {
-      enabled: String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true',
+      enabled: !IS_VERCEL && String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true',
       minutes: Math.max(30, Number(process.env.CVCRM_SYNC_MINUTES || 60)),
     },
     email: process.env.CVCRM_EMAIL || null,
