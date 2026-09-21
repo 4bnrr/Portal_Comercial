@@ -2291,3 +2291,26 @@ main{
   .vertex-detail-table td:last-child{margin-top:auto}
   .vertex-detail-table .btn{width:100%;min-height:36px;padding:7px 5px;font-size:10px}
 }
+
+/* V22.14 — painel comercial compacto no início mobile */
+@media(max-width:700px){
+  .hero-card-refined{
+    min-height:0;
+    padding:18px;
+    border-radius:18px;
+  }
+  .hero-card-refined .eyebrow{font-size:10px}
+  .hero-card-refined h2{
+    margin:8px 0 14px;
+    font-size:23px;
+    line-height:1.08;
+  }
+  .hero-card-refined .hero-list{gap:0 10px}
+  .hero-card-refined .hero-list>div{padding:9px 0}
+  .hero-card-refined .hero-list b{font-size:13px;line-height:1.25}
+  .hero-card-refined .hero-list small{
+    margin-top:3px;
+    font-size:11px;
+    line-height:1.35;
+  }
+}
