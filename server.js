@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
+const IS_VERCEL = Boolean(process.env.VERCEL);
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -37,7 +38,7 @@ function requireAdmin(req,res,next){
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-const CACHE_FILE = path.join(DATA_DIR, 'cache.json');
+const CACHE_FILE = path.join(DATA_DIR, IS_VERCEL ? 'vercel-cache.json' : 'cache.json');
 const MATERIALS_FILE = path.join(DATA_DIR, 'materials.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
 const RAW_FILE = path.join(DATA_DIR, 'raw-cvcrm-last.json');
@@ -52,9 +53,11 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ENTERPRISE_IMAGE_DIR = path.join(__dirname, 'public', 'assets', 'empreendimentos');
 const MAX_HISTORY = 150;
 
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-fs.mkdirSync(BACKUP_DIR, { recursive: true });
-fs.mkdirSync(ENTERPRISE_IMAGE_DIR, { recursive: true });
+if (!IS_VERCEL) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  fs.mkdirSync(ENTERPRISE_IMAGE_DIR, { recursive: true });
+}
 
 const emptyCache = { lastSync: null, lastSuccess: null, status: 'not_configured', error: null, enterprises: [], units: [], stats: {} };
 const jsonCache = new Map();
@@ -72,20 +75,23 @@ function readJson(file, fallback) {
   }
 }
 function writeJson(file, value) {
+  if (IS_VERCEL) throw new Error('Operação indisponível no espelho somente leitura da Vercel.');
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
   fs.renameSync(tmp, file);
   const stat = fs.statSync(file);
   jsonCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value });
 }
-if (!fs.existsSync(CACHE_FILE)) writeJson(CACHE_FILE, emptyCache);
-if (!fs.existsSync(MATERIALS_FILE)) writeJson(MATERIALS_FILE, []);
-if (!fs.existsSync(HISTORY_FILE)) writeJson(HISTORY_FILE, []);
-if (!fs.existsSync(ENTERPRISE_LINKS_FILE)) writeJson(ENTERPRISE_LINKS_FILE, {});
-if (!fs.existsSync(PAYMENT_PLAN_RULES_FILE)) writeJson(PAYMENT_PLAN_RULES_FILE, { version: 1, defaultRule: {}, rules: [] });
-if (!fs.existsSync(RATE_LIMIT_FILE)) writeJson(RATE_LIMIT_FILE, { blockedUntil: null, last429At: null, count429: 0 });
-if (!fs.existsSync(PRICE_HISTORY_FILE)) writeJson(PRICE_HISTORY_FILE, []);
-if (!fs.existsSync(ENTERPRISE_MEDIA_FILE)) writeJson(ENTERPRISE_MEDIA_FILE, {});
+if (!IS_VERCEL) {
+  if (!fs.existsSync(CACHE_FILE)) writeJson(CACHE_FILE, emptyCache);
+  if (!fs.existsSync(MATERIALS_FILE)) writeJson(MATERIALS_FILE, []);
+  if (!fs.existsSync(HISTORY_FILE)) writeJson(HISTORY_FILE, []);
+  if (!fs.existsSync(ENTERPRISE_LINKS_FILE)) writeJson(ENTERPRISE_LINKS_FILE, {});
+  if (!fs.existsSync(PAYMENT_PLAN_RULES_FILE)) writeJson(PAYMENT_PLAN_RULES_FILE, { version: 1, defaultRule: {}, rules: [] });
+  if (!fs.existsSync(RATE_LIMIT_FILE)) writeJson(RATE_LIMIT_FILE, { blockedUntil: null, last429At: null, count429: 0 });
+  if (!fs.existsSync(PRICE_HISTORY_FILE)) writeJson(PRICE_HISTORY_FILE, []);
+  if (!fs.existsSync(ENTERPRISE_MEDIA_FILE)) writeJson(ENTERPRISE_MEDIA_FILE, {});
+}
 
 
 function safeSlug(value) {
@@ -1197,6 +1203,14 @@ const uploadEnterpriseImage = multer({
 });
 
 app.use(express.json({ limit: '2mb' }));
+app.use('/api', (req, res, next) => {
+  if (IS_VERCEL && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return res.status(503).json({
+      error: 'A versão publicada na Vercel é somente para consulta. Use a VM para sincronização e administração.',
+    });
+  }
+  next();
+});
 app.use('/uploads', express.static(UPLOAD_DIR, {
   etag: true,
   lastModified: true,
@@ -1401,14 +1415,16 @@ app.get('/api/export/catalog.json', (_, res) => res.download(CACHE_FILE, 'catalo
 
 app.get('*', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[ESTACAO 1] Portal iniciado em http://localhost:${PORT}`);
-  console.log(`[ESTACAO 1] Login do portal: desativado`);
-  console.log(`[CVCRM] ${configured() ? 'Configurado' : 'Pendente de configuração'}`);
-  if (configured()) console.log('[CVCRM] Sincronizacao automatica configurada pelo servidor.');
-});
+if (!IS_VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[ESTACAO 1] Portal iniciado em http://localhost:${PORT}`);
+    console.log(`[ESTACAO 1] Login do portal: desativado`);
+    console.log(`[CVCRM] ${configured() ? 'Configurado' : 'Pendente de configuração'}`);
+    if (configured()) console.log('[CVCRM] Sincronizacao automatica configurada pelo servidor.');
+  });
+}
 
-const autoSyncEnabled = String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true';
+const autoSyncEnabled = !IS_VERCEL && String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true';
 const minutes = Math.max(30, Number(process.env.CVCRM_SYNC_MINUTES || 60));
 const startupDelayMs = Math.max(15000, Number(process.env.CVCRM_STARTUP_SYNC_DELAY_MS || 30000));
 
@@ -1420,3 +1436,5 @@ if (autoSyncEnabled) {
 } else {
   console.log('[CVCRM] Sincronização automática desativada.');
 }
+
+export default app;
