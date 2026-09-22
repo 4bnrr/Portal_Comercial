@@ -1323,7 +1323,7 @@ app.get('/api/status', async (_, res) => {
         ? vercelAutoSync
         : String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true',
       minutes: Math.max(30, Number(process.env.CVCRM_SYNC_MINUTES || 60)),
-      scheduler: IS_VERCEL ? 'vercel-cron' : 'node-interval',
+      scheduler: IS_VERCEL ? 'github-actions' : 'node-interval',
       persistentStorage: IS_VERCEL ? blobStorageConfigured() : true,
     },
     email: process.env.CVCRM_EMAIL || null,
@@ -1339,7 +1339,7 @@ app.get('/api/cron/sync', async (req, res) => {
   if (!blobStorageConfigured()) return res.status(503).json({ error: 'Vercel Blob não configurado.' });
   if (syncing) return res.status(409).json({ error: 'Já existe uma sincronização em andamento.' });
   try {
-    const result = await syncCvcrm('vercel-cron');
+    const result = await syncCvcrm('github-actions');
     res.json({ ok: true, result });
   } catch (error) {
     console.error('[VERCEL CRON]', error);
