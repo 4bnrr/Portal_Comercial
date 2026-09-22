@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const IS_VERCEL = Boolean(process.env.VERCEL);
+const SYNC_ONCE_MODE = process.argv.includes('--sync-once');
 const BUNDLED_DATA_DIR = path.join(__dirname, 'data');
 const VERCEL_RUNTIME_DATA_DIR = path.join(os.tmpdir(), 'estacao1-portal-data');
 
@@ -1278,7 +1279,8 @@ const uploadEnterpriseImage = multer({
 
 app.use(express.json({ limit: '2mb' }));
 app.use('/api', (req, res, next) => {
-  if (IS_VERCEL && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+  const isAuthorizedCatalogPublish = req.method === 'POST' && req.path === '/cron/publish';
+  if (IS_VERCEL && !isAuthorizedCatalogPublish && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return res.status(503).json({
       error: 'A versão publicada na Vercel é somente para consulta. Use a VM para sincronização e administração.',
     });
@@ -1344,6 +1346,29 @@ app.get('/api/cron/sync', async (req, res) => {
   } catch (error) {
     console.error('[VERCEL CRON]', error);
     res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/cron/publish', async (req, res) => {
+  if (!IS_VERCEL) return res.status(404).json({ error: 'Rota disponível apenas na Vercel.' });
+  if (!cronAuthorized(req)) return res.status(401).json({ error: 'Não autorizado.' });
+  if (!blobStorageConfigured()) return res.status(503).json({ error: 'Vercel Blob não configurado.' });
+  const catalog = req.body;
+  if (!catalog || typeof catalog !== 'object' || !Array.isArray(catalog.enterprises) || !Array.isArray(catalog.units)) {
+    return res.status(400).json({ error: 'Catálogo inválido.' });
+  }
+  try {
+    await persistCatalog(catalog);
+    writeJson(CACHE_FILE, catalog);
+    res.json({
+      ok: true,
+      lastSuccess: catalog.lastSuccess || null,
+      enterprises: catalog.enterprises.length,
+      units: catalog.units.length,
+    });
+  } catch (error) {
+    console.error('[VERCEL PUBLISH]', error);
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 app.get('/api/integrity', (_, res) => res.json(readJson(INTEGRITY_FILE, { at: null, warnings: ['Ainda não houve sincronização V3.'] })));
@@ -1510,7 +1535,7 @@ app.get('/api/export/catalog.json', (_, res) => res.download(CACHE_FILE, 'catalo
 
 app.get('*', (_, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-if (!IS_VERCEL) {
+if (!IS_VERCEL && !SYNC_ONCE_MODE) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[ESTACAO 1] Portal iniciado em http://localhost:${PORT}`);
     console.log(`[ESTACAO 1] Login do portal: desativado`);
@@ -1519,7 +1544,7 @@ if (!IS_VERCEL) {
   });
 }
 
-const autoSyncEnabled = !IS_VERCEL && String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true';
+const autoSyncEnabled = !IS_VERCEL && !SYNC_ONCE_MODE && String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true';
 const minutes = Math.max(30, Number(process.env.CVCRM_SYNC_MINUTES || 60));
 const startupDelayMs = Math.max(15000, Number(process.env.CVCRM_STARTUP_SYNC_DELAY_MS || 30000));
 
@@ -1530,6 +1555,31 @@ if (autoSyncEnabled) {
   setInterval(() => { if (configured()) startSync('automatic'); }, minutes * 60 * 1000);
 } else {
   console.log('[CVCRM] Sincronização automática desativada.');
+}
+
+if (SYNC_ONCE_MODE) {
+  const publishUrl = String(process.env.VERCEL_PUBLISH_URL || '').trim();
+  const publishSecret = String(process.env.CRON_SECRET || '');
+  if (!publishUrl || !publishSecret) {
+    throw new Error('VERCEL_PUBLISH_URL e CRON_SECRET são obrigatórios no modo --sync-once.');
+  }
+
+  const result = await syncCvcrm('github-actions');
+  const catalog = readJson(CACHE_FILE, emptyCache);
+  const response = await fetch(publishUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${publishSecret}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(catalog),
+    signal: AbortSignal.timeout(120000),
+  });
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`Falha ao publicar catálogo na Vercel (HTTP ${response.status}): ${responseText.slice(0, 500)}`);
+  }
+  console.log(`[CVCRM] Sincronização e publicação concluídas: ${result.unitsNormalized} unidades.`);
 }
 
 export default app;

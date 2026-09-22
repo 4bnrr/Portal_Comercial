@@ -15,15 +15,28 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
+      - name: Baixar portal
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --omit=dev
+
       - name: Consultar CVCRM e publicar catalogo
         env:
           CRON_SECRET: ${{ secrets.VERCEL_CRON_SECRET }}
-        run: |
-          test -n "$CRON_SECRET"
-          curl --fail-with-body --silent --show-error \
-            --max-time 300 \
-            --retry 2 \
-            --header "Authorization: Bearer $CRON_SECRET" \
-            https://simuladorest1.vercel.app/api/cron/sync
+          CVCRM_DOMAIN: ${{ secrets.CVCRM_DOMAIN }}
+          CVCRM_EMAIL: ${{ secrets.CVCRM_EMAIL }}
+          CVCRM_TOKEN: ${{ secrets.CVCRM_TOKEN }}
+          CVCRM_REQUEST_GAP_MS: 3200
+          CVCRM_PHASE_GAP_MS: 0
+          CVCRM_AUTO_SYNC: false
+          VERCEL_PUBLISH_URL: https://simuladorest1.vercel.app/api/cron/publish
+        run: node server.js --sync-once
