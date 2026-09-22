@@ -77,3 +77,11 @@ Para atualizar uma instalacao existente:
 3. Nao substitua o seu arquivo .env.
 4. Inicie o site.
 5. Abra Atualizacoes > Sincronizar agora.
+
+VERCEL - SINCRONIZACAO PROGRAMADA
+- O endpoint /api/cron/sync executa a consulta completa ao CVCRM antes de responder.
+- O arquivo vercel.json agenda a sincronizacao para o inicio de cada hora.
+- O catalogo publicado e preservado em um armazenamento Vercel Blob privado.
+- Configure CVCRM_DOMAIN, CVCRM_EMAIL, CVCRM_TOKEN e CRON_SECRET somente nas variaveis de ambiente da Vercel.
+- Conecte um Vercel Blob privado ao projeto para criar BLOB_READ_WRITE_TOKEN automaticamente.
+- O agendamento horario requer plano Vercel Pro ou Enterprise; no plano Hobby, cron nativo e limitado a uma execucao diaria.
