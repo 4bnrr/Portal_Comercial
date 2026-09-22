@@ -3,6 +3,7 @@ import express from 'express';
 import multer from 'multer';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
@@ -10,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const IS_VERCEL = Boolean(process.env.VERCEL);
+const BUNDLED_DATA_DIR = path.join(__dirname, 'data');
+const VERCEL_RUNTIME_DATA_DIR = path.join(os.tmpdir(), 'estacao1-portal-data');
 
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -36,7 +39,7 @@ function requireAdmin(req,res,next){
   res.status(401).json({error:'Não autorizado'});
 }
 const PORT = Number(process.env.PORT || 3000);
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = IS_VERCEL ? VERCEL_RUNTIME_DATA_DIR : BUNDLED_DATA_DIR;
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const CACHE_FILE = path.join(DATA_DIR, IS_VERCEL ? 'vercel-cache.json' : 'cache.json');
 const MATERIALS_FILE = path.join(DATA_DIR, 'materials.json');
@@ -52,11 +55,24 @@ const PRICE_HISTORY_FILE = path.join(DATA_DIR, 'price-history.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ENTERPRISE_IMAGE_DIR = path.join(__dirname, 'public', 'assets', 'empreendimentos');
 const MAX_HISTORY = 150;
+const VERCEL_CATALOG_BLOB_PATH = process.env.VERCEL_CATALOG_BLOB_PATH || 'estacao1/catalog.json';
 
-if (!IS_VERCEL) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  fs.mkdirSync(ENTERPRISE_IMAGE_DIR, { recursive: true });
+fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(BACKUP_DIR, { recursive: true });
+if (!IS_VERCEL) fs.mkdirSync(ENTERPRISE_IMAGE_DIR, { recursive: true });
+
+if (IS_VERCEL) {
+  const seedFiles = [
+    'vercel-cache.json', 'materials.json', 'history.json', 'enterprise-links.json',
+    'payment-plan-rules.json', 'cvcrm-rate-limit.json', 'price-history.json',
+    'enterprise-media.json',
+  ];
+  for (const name of seedFiles) {
+    const source = path.join(BUNDLED_DATA_DIR, name);
+    const target = path.join(DATA_DIR, name);
+    if (!fs.existsSync(target) && fs.existsSync(source)) fs.copyFileSync(source, target);
+  }
 }
 
 const emptyCache = { lastSync: null, lastSuccess: null, status: 'not_configured', error: null, enterprises: [], units: [], stats: {} };
@@ -75,12 +91,55 @@ function readJson(file, fallback) {
   }
 }
 function writeJson(file, value) {
-  if (IS_VERCEL) throw new Error('Operação indisponível no espelho somente leitura da Vercel.');
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
   fs.renameSync(tmp, file);
   const stat = fs.statSync(file);
   jsonCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, value });
+}
+
+let persistedCatalog = null;
+let persistedCatalogLoadedAt = 0;
+const PERSISTED_CATALOG_TTL_MS = 30000;
+
+function blobStorageConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+}
+
+async function readPersistedCatalog({ fresh = false } = {}) {
+  const localFallback = readJson(CACHE_FILE, emptyCache);
+  if (!IS_VERCEL || !blobStorageConfigured()) return localFallback;
+  if (!fresh && persistedCatalog && Date.now() - persistedCatalogLoadedAt < PERSISTED_CATALOG_TTL_MS) {
+    return persistedCatalog;
+  }
+  try {
+    const { get: getBlob } = await import('@vercel/blob');
+    const stored = await getBlob(VERCEL_CATALOG_BLOB_PATH, { access: 'private', useCache: false });
+    if (!stored?.stream) return localFallback;
+    const value = JSON.parse(await new Response(stored.stream).text());
+    persistedCatalog = value;
+    persistedCatalogLoadedAt = Date.now();
+    writeJson(CACHE_FILE, value);
+    return value;
+  } catch (error) {
+    console.error('[VERCEL BLOB] Falha ao ler catálogo persistente:', error.message);
+    return localFallback;
+  }
+}
+
+async function persistCatalog(cache) {
+  if (!IS_VERCEL) return;
+  if (!blobStorageConfigured()) throw new Error('Vercel Blob não configurado. Conecte um armazenamento privado ao projeto.');
+  const { put: putBlob } = await import('@vercel/blob');
+  await putBlob(VERCEL_CATALOG_BLOB_PATH, JSON.stringify(cache), {
+    access: 'private',
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: 'application/json',
+    cacheControlMaxAge: 60,
+  });
+  persistedCatalog = cache;
+  persistedCatalogLoadedAt = Date.now();
 }
 if (!IS_VERCEL) {
   if (!fs.existsSync(CACHE_FILE)) writeJson(CACHE_FILE, emptyCache);
@@ -176,6 +235,15 @@ function addHistory(action, detail, meta = {}) {
 
 function configured() {
   return Boolean(process.env.CVCRM_DOMAIN && process.env.CVCRM_EMAIL && process.env.CVCRM_TOKEN);
+}
+function cronAuthorized(req) {
+  const secret = String(process.env.CRON_SECRET || '');
+  const received = String(req.headers.authorization || '');
+  if (!secret) return false;
+  const expected = `Bearer ${secret}`;
+  const left = Buffer.from(received);
+  const right = Buffer.from(expected);
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 function baseUrl() { return `https://${process.env.CVCRM_DOMAIN}.cvcrm.com.br`; }
 function normKey(s) { return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
@@ -990,12 +1058,17 @@ async function syncCvcrm(trigger = 'manual') {
   };
 
   const startedAt = new Date().toISOString();
+  if (IS_VERCEL) {
+    const storedCatalog = await readPersistedCatalog({ fresh: true });
+    writeJson(CACHE_FILE, storedCatalog);
+  }
   const previousCache = readJson(CACHE_FILE, emptyCache);
 
   let unitsRows = [];
   let situationRows = [];
   let priceRows = [];
   let appraisalData = { perEnterprise: new Map(), vertexDashboard: new Map(), diagnostics: [] };
+  let merged = { units: [], allUnits: [], enterprises: [], allEnterprises: [] };
 
   try {
     await respectPersistentCooldown();
@@ -1034,7 +1107,7 @@ async function syncCvcrm(trigger = 'manual') {
       retryWaitSeconds: null,
     });
 
-    const merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.vertexDashboard);
+    merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.vertexDashboard);
     const appraisalErrors = appraisalData.diagnostics.filter(d => !d.ok).map(d => ({ endpoint: `tabela detalhada ${d.enterpriseName}`, message: d.error }));
     const integrity = buildIntegrity(unitsRows, situationRows, priceRows, merged, appraisalErrors);
     integrity.appraisals = {
@@ -1096,6 +1169,7 @@ async function syncCvcrm(trigger = 'manual') {
     try { backupFiles('antes-sync'); } catch {}
     // ÚNICO momento em que o catálogo publicado é substituído.
     writeJson(CACHE_FILE, nextCache);
+    await persistCatalog(nextCache);
     try { recordPriceHistory(nextCache); } catch (error) { console.warn('[HISTORICO PRECO]', error.message); }
 
     addHistory(
@@ -1228,10 +1302,11 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-app.get('/api/status', (_, res) => {
-  const cache = readJson(CACHE_FILE, emptyCache);
+app.get('/api/status', async (_, res) => {
+  const cache = await readPersistedCatalog();
   const rateLimit = readRateLimitState();
   const blockedUntilMs = rateLimit.blockedUntil ? Date.parse(rateLimit.blockedUntil) : 0;
+  const vercelAutoSync = IS_VERCEL && configured() && blobStorageConfigured() && Boolean(process.env.CRON_SECRET);
   res.json({
     readOnly: IS_VERCEL,
     configured: configured(),
@@ -1244,14 +1319,33 @@ app.get('/api/status', (_, res) => {
     },
     domain: process.env.CVCRM_DOMAIN || null,
     autoSync: {
-      enabled: !IS_VERCEL && String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true',
+      enabled: IS_VERCEL
+        ? vercelAutoSync
+        : String(process.env.CVCRM_AUTO_SYNC || 'true').toLowerCase() === 'true',
       minutes: Math.max(30, Number(process.env.CVCRM_SYNC_MINUTES || 60)),
+      scheduler: IS_VERCEL ? 'vercel-cron' : 'node-interval',
+      persistentStorage: IS_VERCEL ? blobStorageConfigured() : true,
     },
     email: process.env.CVCRM_EMAIL || null,
     ...cache,
   });
 });
-app.get('/api/catalog', (_, res) => res.json(readJson(CACHE_FILE, emptyCache)));
+app.get('/api/catalog', async (_, res) => res.json(await readPersistedCatalog()));
+
+app.get('/api/cron/sync', async (req, res) => {
+  if (!IS_VERCEL) return res.status(404).json({ error: 'Agendamento disponível somente na Vercel.' });
+  if (!cronAuthorized(req)) return res.status(401).json({ error: 'Agendamento não autorizado.' });
+  if (!configured()) return res.status(503).json({ error: 'Credenciais do CVCRM não configuradas na Vercel.' });
+  if (!blobStorageConfigured()) return res.status(503).json({ error: 'Vercel Blob não configurado.' });
+  if (syncing) return res.status(409).json({ error: 'Já existe uma sincronização em andamento.' });
+  try {
+    const result = await syncCvcrm('vercel-cron');
+    res.json({ ok: true, result });
+  } catch (error) {
+    console.error('[VERCEL CRON]', error);
+    res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
 app.get('/api/integrity', (_, res) => res.json(readJson(INTEGRITY_FILE, { at: null, warnings: ['Ainda não houve sincronização V3.'] })));
 app.get('/api/enterprise-links', (_, res) => res.json(readJson(ENTERPRISE_LINKS_FILE, {})));
 app.get('/api/payment-plan-rules', (_, res) => res.json(readJson(PAYMENT_PLAN_RULES_FILE, { version: 1, defaultRule: {}, rules: [] })));

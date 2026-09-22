@@ -8,6 +8,7 @@
     "test": "node tests-payment-plan.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.0",
     "dotenv": "^17.2.2",
     "express": "^4.21.2",
     "multer": "^2.0.2",
