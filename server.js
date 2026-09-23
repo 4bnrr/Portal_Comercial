@@ -656,7 +656,7 @@ function collectVertexDashboardRows(payload) {
       return;
     }
 
-    const tableName = textValue(pick(node, ['tabela','nome_tabela','nometabela']));
+    const tableName = textValue(pick(node, ['tabela','nome_tabela','nometabela','nome']));
     const rows = Array.isArray(node.dados) ? node.dados : null;
     if (rows && normKey(tableName).includes('vertexgetulio') && normKey(tableName).includes('dashboard')) {
       for (const row of rows) {
@@ -684,7 +684,7 @@ function lookupVertexDashboard(index, row) {
 }
 
 async function fetchDetailedAppraisals(unitsRows) {
-  const excluded = new Set(['araca','lantai']);
+  const excluded = new Set(['araca','lantai','acquaventureamerica']);
   const enterprises = new Map();
   for (const row of unitsRows) {
     const id = enterpriseKey(row);
@@ -992,8 +992,8 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
   }
 
   // V10: catálogo estritamente comercial. Só publica unidades DISPONÍVEIS.
-  // ARAÇA e Lantai estão explicitamente fora da vitrine comercial.
-  const excludedEnterpriseNames = new Set(['araca', 'lantai']);
+  // Mantém as exclusões comerciais já adotadas na vitrine.
+  const excludedEnterpriseNames = new Set(['araca', 'lantai', 'acquaventureamerica']);
   const isExcludedEnterprise = name => excludedEnterpriseNames.has(normKey(name));
   const availableCommercialUnits = allUnits.filter(u =>
     u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName)
