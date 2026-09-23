@@ -1109,6 +1109,21 @@ async function syncCvcrm(trigger = 'manual') {
     });
 
     merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.vertexDashboard);
+    // O Vertex foi liberado manualmente a partir da tabela Dashboard aprovada.
+    // Se um ciclo do CVCRM não conseguir reconstruí-lo, preservamos a última
+    // versão válida em vez de removê-lo da vitrine inteira.
+    const requiredEnterpriseIds = new Set(['121']);
+    for (const enterpriseId of requiredEnterpriseIds) {
+      const staged = merged.enterprises.some(e => String(e.id) === enterpriseId);
+      if (staged) continue;
+      const previousEnterprise = (previousCache.enterprises || []).find(e => String(e.id) === enterpriseId);
+      const previousUnits = (previousCache.units || []).filter(u => String(u.enterpriseId) === enterpriseId);
+      if (!previousEnterprise || !previousUnits.length) continue;
+      merged.enterprises.push(previousEnterprise);
+      merged.units.push(...previousUnits);
+      console.warn(`[CVCRM] ${previousEnterprise.name} não foi reconstruído; última versão válida preservada.`);
+    }
+    merged.enterprises.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     const appraisalErrors = appraisalData.diagnostics.filter(d => !d.ok).map(d => ({ endpoint: `tabela detalhada ${d.enterpriseName}`, message: d.error }));
     const integrity = buildIntegrity(unitsRows, situationRows, priceRows, merged, appraisalErrors);
     integrity.appraisals = {
