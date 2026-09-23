@@ -143,7 +143,11 @@ async function persistCatalog(cache) {
   persistedCatalogLoadedAt = Date.now();
 }
 if (!IS_VERCEL) {
-  if (!fs.existsSync(CACHE_FILE)) writeJson(CACHE_FILE, emptyCache);
+  if (!fs.existsSync(CACHE_FILE)) {
+    const bundledVercelCache = path.join(BUNDLED_DATA_DIR, 'vercel-cache.json');
+    const initialCache = SYNC_ONCE_MODE ? readJson(bundledVercelCache, emptyCache) : emptyCache;
+    writeJson(CACHE_FILE, initialCache);
+  }
   if (!fs.existsSync(MATERIALS_FILE)) writeJson(MATERIALS_FILE, []);
   if (!fs.existsSync(HISTORY_FILE)) writeJson(HISTORY_FILE, []);
   if (!fs.existsSync(ENTERPRISE_LINKS_FILE)) writeJson(ENTERPRISE_LINKS_FILE, {});
