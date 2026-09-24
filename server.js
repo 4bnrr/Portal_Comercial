@@ -689,11 +689,12 @@ function lookupVertexDashboard(index, row) {
 
 async function fetchDetailedAppraisals(unitsRows) {
   const excluded = new Set(['araca','lantai','acquaventureamerica']);
+  const manuallyEnabledEnterpriseIds = new Set(['86']); // Acqua Venture América 2 no cadastro comercial
   const enterprises = new Map();
   for (const row of unitsRows) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
-    if (!id || excluded.has(normKey(name))) continue;
+    if (!id || (excluded.has(normKey(name)) && !manuallyEnabledEnterpriseIds.has(String(id)))) continue;
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name });
   }
 
@@ -998,15 +999,17 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
   // V10: catálogo estritamente comercial. Só publica unidades DISPONÍVEIS.
   // Mantém as exclusões comerciais já adotadas na vitrine.
   const excludedEnterpriseNames = new Set(['araca', 'lantai', 'acquaventureamerica']);
-  const isExcludedEnterprise = name => excludedEnterpriseNames.has(normKey(name));
+  const manuallyEnabledEnterpriseIds = new Set(['86']); // Acqua Venture América 2 no CVCRM
+  const isExcludedEnterprise = (name, id) =>
+    excludedEnterpriseNames.has(normKey(name)) && !manuallyEnabledEnterpriseIds.has(String(id));
   const availableCommercialUnits = allUnits.filter(u =>
-    u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName)
+    u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName, u.enterpriseId)
   );
   const availableEnterpriseIds = new Set(availableCommercialUnits.map(u => String(u.enterpriseId)));
 
   const allEnterprises = [...enterpriseMap.values()];
   let enterprises = allEnterprises.filter(e =>
-    availableEnterpriseIds.has(String(e.id)) && !isExcludedEnterprise(e.name)
+    availableEnterpriseIds.has(String(e.id)) && !isExcludedEnterprise(e.name, e.id)
   );
 
   enterprises.sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
