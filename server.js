@@ -651,7 +651,7 @@ function lookupDetailedAppraisal(index, row) {
   return null;
 }
 
-function collectVertexDashboardRows(payload) {
+function collectCommercialDashboardRows(payload) {
   const index = new Map();
   const walk = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 12) return;
@@ -662,7 +662,7 @@ function collectVertexDashboardRows(payload) {
 
     const tableName = textValue(pick(node, ['tabela','nome_tabela','nometabela','nome']));
     const rows = Array.isArray(node.dados) ? node.dados : null;
-    if (rows && normKey(tableName).includes('vertexgetulio') && normKey(tableName).includes('dashboard')) {
+    if (rows && normKey(tableName).includes('dashboard')) {
       for (const row of rows) {
         const detail = {
           price: extractPrice(row),
@@ -698,7 +698,7 @@ async function fetchDetailedAppraisals(unitsRows) {
   }
 
   const perEnterprise = new Map();
-  const vertexDashboard = new Map();
+  const commercialDashboard = new Map();
   const diagnostics = [];
   let position = 0;
   for (const enterprise of [...enterprises.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))) {
@@ -717,8 +717,11 @@ async function fetchDetailedAppraisals(unitsRows) {
       const payload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
       const parsed = collectDetailedUnitAppraisals(payload);
       perEnterprise.set(String(enterprise.id), parsed.index);
-      if (enterprise.id === '121' || normKey(enterprise.name).includes('vertexgetulio')) {
-        for (const [key, value] of collectVertexDashboardRows(payload)) vertexDashboard.set(key, value);
+      const usesApprovedDashboard = enterprise.id === '121' || enterprise.id === '122' ||
+        normKey(enterprise.name).includes('vertexgetulio') ||
+        normKey(enterprise.name).includes('acquaventureamericaii');
+      if (usesApprovedDashboard) {
+        for (const [key, value] of collectCommercialDashboardRows(payload)) commercialDashboard.set(key, value);
       }
       diagnostics.push({
         enterpriseId: enterprise.id,
@@ -743,7 +746,7 @@ async function fetchDetailedAppraisals(unitsRows) {
   // Guardamos a resposta detalhada para diagnóstico, mas limitamos cada payload a
   // uma serialização completa apenas nesta fonte auxiliar; o arquivo não é servido publicamente.
   try { writeJson(DETAILED_TABLE_RAW_FILE, { at: new Date().toISOString(), enterprises: diagnostics }); } catch {}
-  return { perEnterprise, vertexDashboard, diagnostics };
+  return { perEnterprise, commercialDashboard, diagnostics };
 }
 
 function unitKey(row) {
@@ -953,7 +956,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     updatedAt: textValue(pick(statusSource, ['referencia_data','data_referencia','datareferencia','updated_at','atualizado_em']), new Date().toISOString()),
   };
 }
-function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), vertexDashboard = new Map()) {
+function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), commercialDashboard = new Map()) {
   const situationIndex = latestByUnit(situationRows);
   const priceIndex = bestPriceByUnit(priceRows);
   const allUnits = unitsRows.map(row => {
@@ -963,7 +966,9 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
       lookupUnit(situationIndex, row),
       lookupUnit(priceIndex, row),
       lookupDetailedAppraisal(enterpriseAppraisals, row),
-      isVertexUnit(row) ? lookupVertexDashboard(vertexDashboard, row) : null
+      (isVertexUnit(row) || isAcquaVentureAmericaIIUnit(row))
+        ? lookupVertexDashboard(commercialDashboard, row)
+        : null
     );
   });
 
@@ -1076,7 +1081,7 @@ async function syncCvcrm(trigger = 'manual') {
   let unitsRows = [];
   let situationRows = [];
   let priceRows = [];
-  let appraisalData = { perEnterprise: new Map(), vertexDashboard: new Map(), diagnostics: [] };
+  let appraisalData = { perEnterprise: new Map(), commercialDashboard: new Map(), diagnostics: [] };
   let merged = { units: [], allUnits: [], enterprises: [], allEnterprises: [] };
 
   try {
@@ -1116,7 +1121,7 @@ async function syncCvcrm(trigger = 'manual') {
       retryWaitSeconds: null,
     });
 
-    merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.vertexDashboard);
+    merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.commercialDashboard);
     // Empreendimentos liberados recentemente não devem sumir da vitrine por uma
     // inconsistência temporária entre unidades, situações e tabelas de preço.
     const requiredEnterpriseIds = new Set(['121', '122']);
