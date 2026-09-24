@@ -654,11 +654,13 @@ function pctBR(value){return `${Number(value||0).toLocaleString('pt-BR',{minimum
 function paymentPlanContext(){
   const base=lastSimulation||{};
   const unit=selectedSimulationUnit||base.unit||null;
+  const clientId=String(base.clientId||document.querySelector('#clientId')?.value||'').trim();
+  const clientName=String(base.clientName||document.querySelector('#clientName')?.value||'').trim();
   const financingApproved=Math.max(0,parseMoney(document.querySelector('#financing')?.value)||Number(base.financingApproved||0));
   const subsidy=Math.max(0,parseMoney(document.querySelector('#subsidy')?.value)||Number(base.subsidy||0));
   const sale=Math.max(0,Number(unit?.price??base.sale??0));
   const appraisal=Math.max(0,Number(unit?.appraisal??base.appraisal??0));
-  return {unit,sale,appraisal,financingApproved,subsidy,maxFinancingPercent:80};
+  return {unit,clientId,clientName,sale,appraisal,financingApproved,subsidy,maxFinancingPercent:80};
 }
 function renderPaymentPlan(){
   const area=document.querySelector('#paymentPlanTab'); if(!area)return;
@@ -729,6 +731,8 @@ function printPaymentPlan(){
     </div>
 
     <div class="print-grid plan-print-grid">
+      <div><span>Cliente</span><b>${escapeHtml(ctx.clientName||'Não informado')}</b></div>
+      <div><span>ID do cliente</span><b>${escapeHtml(ctx.clientId||'Não informado')}</b></div>
       <div><span>Valor do imóvel</span><b>${fmtBRL(r.sale)}</b></div>
       <div><span>Valor da avaliação</span><b>${fmtBRL(r.appraisal)}</b></div>
       <div><span>Financiamento + Subsídio</span><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div>
