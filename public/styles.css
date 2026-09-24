@@ -1346,6 +1346,11 @@ main{
   transform:scale(1.002);
   transition:transform .45s cubic-bezier(.2,.7,.2,1),filter .3s ease;
 }
+.enterprise-photo--contain{
+  object-fit:contain;
+  padding:34px;
+  background:#fff;
+}
 .enterprise-photo-overlay{
   position:absolute;
   inset:0;

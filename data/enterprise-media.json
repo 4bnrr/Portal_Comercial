@@ -15,6 +15,15 @@
     "visible": true,
     "highlights": []
   },
+  "acquaventureamericaii": {
+    "sourceName": "Acqua Venture America II",
+    "displayName": "Acqua Venture America II",
+    "image": "/assets/empreendimentos/acqua-venture-america-2.jpg",
+    "imageFit": "contain",
+    "url": "",
+    "visible": true,
+    "highlights": []
+  },
   "acquaventureeuropaii": {
     "sourceName": "Acqua Venture Europa II",
     "displayName": "Acqua Venture Europa II",

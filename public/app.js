@@ -86,6 +86,7 @@ function enterpriseMedia(name){
   const cfg=enterpriseMediaConfig[n]||{};
   return {
     image:cfg.image||'/assets/empreendimentos/placeholder.svg',
+    imageFit:cfg.imageFit==='contain'?'contain':'cover',
     url:cfg.url||'',
     displayName:cfg.displayName||name,
     visible:cfg.visible!==false,
@@ -116,7 +117,7 @@ function enterprises(){
         return `<article class="card enterprise-card enterprise-photo-card">
           <div class="enterprise-photo-wrap">
             ${image
-              ? `<img class="enterprise-photo" src="${escapeHtml(image)}" alt="${escapeHtml(e.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/assets/empreendimentos/placeholder.svg'">`
+              ? `<img class="enterprise-photo${media.imageFit==='contain'?' enterprise-photo--contain':''}" src="${escapeHtml(image)}" alt="${escapeHtml(e.name)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='/assets/empreendimentos/placeholder.svg'">`
               : ''}
             <div class="enterprise-photo-overlay"></div>
             <div class="enterprise-photo-badges">
