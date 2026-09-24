@@ -679,7 +679,7 @@ function collectCommercialDashboardRows(payload) {
   return index;
 }
 
-function lookupVertexDashboard(index, row) {
+function lookupCommercialDashboard(index, row) {
   if (!index) return null;
   for (const key of detailedUnitKeys(row)) {
     if (index.has(key)) return index.get(key);
@@ -698,7 +698,7 @@ async function fetchDetailedAppraisals(unitsRows) {
   }
 
   const perEnterprise = new Map();
-  const commercialDashboard = new Map();
+  const commercialDashboards = new Map();
   const diagnostics = [];
   let position = 0;
   for (const enterprise of [...enterprises.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))) {
@@ -717,12 +717,11 @@ async function fetchDetailedAppraisals(unitsRows) {
       const payload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
       const parsed = collectDetailedUnitAppraisals(payload);
       perEnterprise.set(String(enterprise.id), parsed.index);
-      const usesApprovedDashboard = enterprise.id === '121' || enterprise.id === '122' ||
-        normKey(enterprise.name).includes('vertexgetulio') ||
-        normKey(enterprise.name).includes('acquaventureamericaii');
-      if (usesApprovedDashboard) {
-        for (const [key, value] of collectCommercialDashboardRows(payload)) commercialDashboard.set(key, value);
-      }
+      const dashboard = collectCommercialDashboardRows(payload);
+      const dashboardEligible = [...dashboard.values()].some(row =>
+        row.status === 'disponivel' && Number(row.price) > 0
+      );
+      if (dashboardEligible) commercialDashboards.set(String(enterprise.id), dashboard);
       diagnostics.push({
         enterpriseId: enterprise.id,
         enterpriseName: enterprise.name,
@@ -730,6 +729,8 @@ async function fetchDetailedAppraisals(unitsRows) {
         appraisalMatches: parsed.index.size,
         matchedObjects: parsed.matchedObjects,
         objectsVisited: parsed.objectsVisited,
+        dashboardMatches: dashboard.size,
+        dashboardEligible,
         sample: payload,
       });
     } catch (error) {
@@ -746,7 +747,7 @@ async function fetchDetailedAppraisals(unitsRows) {
   // Guardamos a resposta detalhada para diagnóstico, mas limitamos cada payload a
   // uma serialização completa apenas nesta fonte auxiliar; o arquivo não é servido publicamente.
   try { writeJson(DETAILED_TABLE_RAW_FILE, { at: new Date().toISOString(), enterprises: diagnostics }); } catch {}
-  return { perEnterprise, commercialDashboard, diagnostics };
+  return { perEnterprise, commercialDashboards, diagnostics };
 }
 
 function unitKey(row) {
@@ -890,9 +891,6 @@ function bestPriceByUnit(rows) {
 function isVertexUnit(row) {
   return enterpriseKey(row) === '121' || normKey(enterpriseName(row)).includes('vertexgetulio');
 }
-function isAcquaVentureAmericaIIUnit(row) {
-  return enterpriseKey(row) === '122' || normKey(enterpriseName(row)).includes('acquaventureamericaii');
-}
 function vertexFloorLabel(row) {
   let floor = intValue(pick(row, ['andar','pavimento']));
   if (floor === null) {
@@ -908,11 +906,11 @@ function vertexCommercialType(row) {
   ]));
   return raw.includes('varanda') ? 'Com varanda' : 'Padrão';
 }
-function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, vertexDashboardRow = null) {
+function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, dashboardRow = null, preserveBaseIdentity = false) {
   const combined = { ...baseRow, ...situationRow, ...priceRow };
-  // Exceções comerciais controladas: situação e preço complementam a unidade,
-  // mas nunca podem trocar a identidade estrutural informada por /unidades.
-  const preserveBaseIdentity = isVertexUnit(baseRow) || isAcquaVentureAmericaIIUnit(baseRow);
+  // Quando o CVCRM publica uma Dashboard comercial para o empreendimento,
+  // situação e preço apenas complementam a identidade estrutural de /unidades.
+  // Isso permite descobrir novos empreendimentos sem cadastrar IDs no código.
   const identitySource = preserveBaseIdentity ? baseRow : combined;
   // A API /unidades/situacao é histórica. Para empreendimentos/unidades recém-criados,
   // pode existir uma linha de situação sem um estado atual reconhecível. Nesse caso,
@@ -927,7 +925,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
   const statusSource = hasSituationRow && situationStatus !== 'indisponivel' ? situationRow : baseRow;
   const eId = enterpriseKey(identitySource) || enterpriseName(identitySource);
   const id = unitKey(identitySource) || crypto.createHash('sha1').update(JSON.stringify(baseRow)).digest('hex').slice(0,14);
-  const price = vertexDashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow);
+  const price = dashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow);
 
   return {
     id,
@@ -948,27 +946,28 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     parkingSpaces: intValue(pick(identitySource, ['vagas_garagem','qtde_vagas_garagem','vagas','vagasgaragem','quantidade_vagas'])),
     price,
     appraisal: detailedAppraisal ?? numberValue(pick(combined, ['VALOR DO IMÓVEL (1x)','VALOR DO IMOVEL (1x)','valor_do_imovel_1x','valor_imovel_1x','valordoimovel1x','valor_imovel','valor do imovel','valor do imóvel','valor_avaliacao','valoravaliacao','avaliacao','valor_de_avaliacao'])),
-    status: vertexDashboardRow?.status || resolvedStatus,
+    status: dashboardRow?.status || resolvedStatus,
     statusReason: textValue(pick(statusSource, ['situacao_bloqueada_motivo','situacao_reservada_nomesituacao','motivo'])),
-    tableName: textValue(vertexDashboardRow?.tableName || pick(priceRow, ['tabela','tabela_preco','tabelapreco','nome_tabela','nometabela','tabela_preco_nome'])),
+    tableName: textValue(dashboardRow?.tableName || pick(priceRow, ['tabela','tabela_preco','tabelapreco','nome_tabela','nometabela','tabela_preco_nome'])),
     hasSituation: hasSituationRow,
     hasPrice: price !== null && price > 0,
     updatedAt: textValue(pick(statusSource, ['referencia_data','data_referencia','datareferencia','updated_at','atualizado_em']), new Date().toISOString()),
   };
 }
-function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), commercialDashboard = new Map()) {
+function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), commercialDashboards = new Map()) {
   const situationIndex = latestByUnit(situationRows);
   const priceIndex = bestPriceByUnit(priceRows);
   const allUnits = unitsRows.map(row => {
-    const enterpriseAppraisals = appraisalByEnterprise.get(String(enterpriseKey(row))) || null;
+    const enterpriseId = String(enterpriseKey(row));
+    const enterpriseAppraisals = appraisalByEnterprise.get(enterpriseId) || null;
+    const enterpriseDashboard = commercialDashboards.get(enterpriseId) || null;
     return normalizeUnit(
       row,
       lookupUnit(situationIndex, row),
       lookupUnit(priceIndex, row),
       lookupDetailedAppraisal(enterpriseAppraisals, row),
-      (isVertexUnit(row) || isAcquaVentureAmericaIIUnit(row))
-        ? lookupVertexDashboard(commercialDashboard, row)
-        : null
+      lookupCommercialDashboard(enterpriseDashboard, row),
+      Boolean(enterpriseDashboard)
     );
   });
 
@@ -1081,7 +1080,7 @@ async function syncCvcrm(trigger = 'manual') {
   let unitsRows = [];
   let situationRows = [];
   let priceRows = [];
-  let appraisalData = { perEnterprise: new Map(), commercialDashboard: new Map(), diagnostics: [] };
+  let appraisalData = { perEnterprise: new Map(), commercialDashboards: new Map(), diagnostics: [] };
   let merged = { units: [], allUnits: [], enterprises: [], allEnterprises: [] };
 
   try {
@@ -1121,7 +1120,7 @@ async function syncCvcrm(trigger = 'manual') {
       retryWaitSeconds: null,
     });
 
-    merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.commercialDashboard);
+    merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.commercialDashboards);
     // Empreendimentos liberados recentemente não devem sumir da vitrine por uma
     // inconsistência temporária entre unidades, situações e tabelas de preço.
     const requiredEnterpriseIds = new Set(['121', '122']);
