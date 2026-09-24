@@ -689,12 +689,11 @@ function lookupVertexDashboard(index, row) {
 
 async function fetchDetailedAppraisals(unitsRows) {
   const excluded = new Set(['araca','lantai','acquaventureamerica']);
-  const manuallyEnabledEnterpriseIds = new Set(['86']); // Acqua Venture América 2 no cadastro comercial
   const enterprises = new Map();
   for (const row of unitsRows) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
-    if (!id || (excluded.has(normKey(name)) && !manuallyEnabledEnterpriseIds.has(String(id)))) continue;
+    if (!id || excluded.has(normKey(name))) continue;
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name });
   }
 
@@ -888,6 +887,9 @@ function bestPriceByUnit(rows) {
 function isVertexUnit(row) {
   return enterpriseKey(row) === '121' || normKey(enterpriseName(row)).includes('vertexgetulio');
 }
+function isAcquaVentureAmericaIIUnit(row) {
+  return enterpriseKey(row) === '122' || normKey(enterpriseName(row)).includes('acquaventureamericaii');
+}
 function vertexFloorLabel(row) {
   let floor = intValue(pick(row, ['andar','pavimento']));
   if (floor === null) {
@@ -905,9 +907,10 @@ function vertexCommercialType(row) {
 }
 function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, vertexDashboardRow = null) {
   const combined = { ...baseRow, ...situationRow, ...priceRow };
-  // Exceção comercial controlada: no Vertex, situação e preço complementam a
-  // unidade, mas nunca podem trocar sua identidade de empreendimento/unidade.
-  const identitySource = isVertexUnit(baseRow) ? baseRow : combined;
+  // Exceções comerciais controladas: situação e preço complementam a unidade,
+  // mas nunca podem trocar a identidade estrutural informada por /unidades.
+  const preserveBaseIdentity = isVertexUnit(baseRow) || isAcquaVentureAmericaIIUnit(baseRow);
+  const identitySource = preserveBaseIdentity ? baseRow : combined;
   // A API /unidades/situacao é histórica. Para empreendimentos/unidades recém-criados,
   // pode existir uma linha de situação sem um estado atual reconhecível. Nesse caso,
   // não devemos transformar a unidade em "indisponivel" e descartá-la do catálogo:
@@ -999,17 +1002,15 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
   // V10: catálogo estritamente comercial. Só publica unidades DISPONÍVEIS.
   // Mantém as exclusões comerciais já adotadas na vitrine.
   const excludedEnterpriseNames = new Set(['araca', 'lantai', 'acquaventureamerica']);
-  const manuallyEnabledEnterpriseIds = new Set(['86']); // Acqua Venture América 2 no CVCRM
-  const isExcludedEnterprise = (name, id) =>
-    excludedEnterpriseNames.has(normKey(name)) && !manuallyEnabledEnterpriseIds.has(String(id));
+  const isExcludedEnterprise = name => excludedEnterpriseNames.has(normKey(name));
   const availableCommercialUnits = allUnits.filter(u =>
-    u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName, u.enterpriseId)
+    u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName)
   );
   const availableEnterpriseIds = new Set(availableCommercialUnits.map(u => String(u.enterpriseId)));
 
   const allEnterprises = [...enterpriseMap.values()];
   let enterprises = allEnterprises.filter(e =>
-    availableEnterpriseIds.has(String(e.id)) && !isExcludedEnterprise(e.name, e.id)
+    availableEnterpriseIds.has(String(e.id)) && !isExcludedEnterprise(e.name)
   );
 
   enterprises.sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -1116,10 +1117,9 @@ async function syncCvcrm(trigger = 'manual') {
     });
 
     merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.vertexDashboard);
-    // O Vertex foi liberado manualmente a partir da tabela Dashboard aprovada.
-    // Se um ciclo do CVCRM não conseguir reconstruí-lo, preservamos a última
-    // versão válida em vez de removê-lo da vitrine inteira.
-    const requiredEnterpriseIds = new Set(['121']);
+    // Empreendimentos liberados recentemente não devem sumir da vitrine por uma
+    // inconsistência temporária entre unidades, situações e tabelas de preço.
+    const requiredEnterpriseIds = new Set(['121', '122']);
     for (const enterpriseId of requiredEnterpriseIds) {
       const staged = merged.enterprises.some(e => String(e.id) === enterpriseId);
       if (staged) continue;
