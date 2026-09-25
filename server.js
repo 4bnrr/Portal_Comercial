@@ -693,14 +693,20 @@ function lookupCommercialDashboard(index, row) {
   return null;
 }
 
-async function fetchDetailedAppraisals(unitsRows) {
+async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
+  const situationIndex = latestByUnit(situationRows);
   const enterprises = new Map();
   for (const row of unitsRows) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
     if (!id) continue;
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name, hasAvailable: false });
-    if (deriveStatus(row) === 'disponivel') enterprises.get(String(id)).hasAvailable = true;
+    const situation = lookupUnit(situationIndex, row);
+    const situationStatus = Object.keys(situation).length ? deriveStatus(situation) : null;
+    const status = situationStatus && situationStatus !== 'indisponivel'
+      ? situationStatus
+      : deriveStatus(row);
+    if (status === 'disponivel') enterprises.get(String(id)).hasAvailable = true;
   }
 
   const perEnterprise = new Map();
@@ -1164,7 +1170,7 @@ async function syncCvcrm(trigger = 'manual') {
 
     // O CVDW de preços não contém a coluna comercial "VALOR DO IMÓVEL (1x)".
     // Essa coluna é obtida na tabela de preço detalhada da API convencional.
-    appraisalData = await fetchDetailedAppraisals(unitsRows);
+    appraisalData = await fetchDetailedAppraisals(unitsRows, situationRows);
 
     setProgress({
       phase: 'processing',
