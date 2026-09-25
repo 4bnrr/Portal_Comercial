@@ -651,7 +651,13 @@ function lookupDetailedAppraisal(index, row) {
   return null;
 }
 
-function collectCommercialDashboardRows(payload) {
+function tableSeriesValue(row, pattern) {
+  const series = Array.isArray(row?.series) ? row.series : [];
+  const item = series.find(entry => pattern.test(normKey(entry?.nome)));
+  return item ? numberValue(item.valor) : null;
+}
+
+function collectCommercialDashboardRows(payload, allowAnyTable = false) {
   const index = new Map();
   const walk = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 12) return;
@@ -662,10 +668,10 @@ function collectCommercialDashboardRows(payload) {
 
     const tableName = textValue(pick(node, ['tabela','nome_tabela','nometabela','nome']));
     const rows = Array.isArray(node.dados) ? node.dados : null;
-    if (rows && normKey(tableName).includes('dashboard')) {
+    if (rows && (allowAnyTable || normKey(tableName).includes('dashboard'))) {
       for (const row of rows) {
         const detail = {
-          price: extractPrice(row),
+          price: tableSeriesValue(row, /valordevenda/) ?? extractPrice(row),
           status: deriveStatus(row),
           tableName,
         };
@@ -693,7 +699,8 @@ async function fetchDetailedAppraisals(unitsRows) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
     if (!id) continue;
-    if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name });
+    if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name, hasAvailable: false });
+    if (deriveStatus(row) === 'disponivel') enterprises.get(String(id)).hasAvailable = true;
   }
 
   const perEnterprise = new Map();
@@ -713,10 +720,37 @@ async function fetchDetailedAppraisals(unitsRows) {
       totalRecords: enterprises.size,
     });
     try {
-      const payload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
+      let payload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
+      let allowAnyTable = false;
+      let dashboard = collectCommercialDashboardRows(payload);
+
+      // Algumas tabelas disponíveis (como a do Allegro) não aparecem na rota
+      // genérica nem no CVDW. Nesse caso, listamos as tabelas do empreendimento,
+      // escolhemos a vigência mais recente sem exigir aprovação e consultamos seu ID.
+      if (!dashboard.size && enterprise.hasAvailable) {
+        const tableList = await cvGetConventional(
+          `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco`
+        );
+        const tables = (Array.isArray(tableList) ? tableList : recordArray(tableList))
+          .filter(table => table && pick(table, ['idtabela','id_tabela']))
+          .sort((a, b) => {
+            const dateDifference = priceTableTimestamp(b) - priceTableTimestamp(a);
+            if (dateDifference) return dateDifference;
+            return priceTableId(b) - priceTableId(a);
+          });
+        const latestTable = tables[0];
+        if (latestTable) {
+          const tableId = pick(latestTable, ['idtabela','id_tabela']);
+          payload = await cvGetConventional(
+            `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
+            { tabelasemjson: 'true' }
+          );
+          allowAnyTable = true;
+          dashboard = collectCommercialDashboardRows(payload, true);
+        }
+      }
       const parsed = collectDetailedUnitAppraisals(payload);
       perEnterprise.set(String(enterprise.id), parsed.index);
-      const dashboard = collectCommercialDashboardRows(payload);
       const dashboardEligible = [...dashboard.values()].some(row =>
         row.status === 'disponivel' && Number(row.price) > 0
       );
@@ -730,6 +764,7 @@ async function fetchDetailedAppraisals(unitsRows) {
         objectsVisited: parsed.objectsVisited,
         dashboardMatches: dashboard.size,
         dashboardEligible,
+        fallbackTable: allowAnyTable,
         sample: payload,
       });
     } catch (error) {
