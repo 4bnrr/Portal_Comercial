@@ -75,7 +75,13 @@ function home(){
   </div>
 </div></section>`}
 
-function visibleEnterprises(){return catalog.enterprises.filter(e=>!isHiddenEnterprise(e.name)&&enterpriseMedia(e.name).visible&&Number(e.availableUnits)>0)}
+function visibleEnterprises(){
+  return catalog.enterprises
+    .filter(e=>Number(e.unidades_disponiveis??e.availableUnits)>0)
+    .filter(e=>!isHiddenEnterprise(e.name))
+    .filter(e=>enterpriseMedia(e.name).visible)
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'pt-BR'));
+}
 
 
 function normalizeEnterpriseName(name){

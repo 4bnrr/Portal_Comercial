@@ -982,6 +982,7 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
         type: u.developmentType,
         totalUnits: 0,
         availableUnits: 0,
+        unidades_disponiveis: 0,
         reservedUnits: 0,
         blockedUnits: 0,
         soldUnits: 0,
@@ -992,7 +993,10 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
     }
     const e = enterpriseMap.get(key);
     e.totalUnits++;
-    if (u.status === 'disponivel') e.availableUnits++;
+    if (u.status === 'disponivel') {
+      e.availableUnits++;
+      e.unidades_disponiveis++;
+    }
     if (u.status === 'reservada') e.reservedUnits++;
     if (u.status === 'bloqueada') e.blockedUnits++;
     if (u.status === 'vendida') e.soldUnits++;
@@ -1010,11 +1014,10 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
   const availableCommercialUnits = allUnits.filter(u =>
     u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName)
   );
-  const availableEnterpriseIds = new Set(availableCommercialUnits.map(u => String(u.enterpriseId)));
 
   const allEnterprises = [...enterpriseMap.values()];
-  let enterprises = allEnterprises.filter(e =>
-    availableEnterpriseIds.has(String(e.id)) && !isExcludedEnterprise(e.name)
+  const enterprises = allEnterprises.filter(e =>
+    Number(e.unidades_disponiveis) > 0 && !isExcludedEnterprise(e.name)
   );
 
   enterprises.sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
