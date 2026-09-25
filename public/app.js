@@ -55,8 +55,9 @@ function timeAgo(value){
 }
 function statusBadge(status){return `<span class="badge ${escapeHtml(status)}">${escapeHtml(status||'indisponível')}</span>`}
 function pageHead(eyebrow,title,description){return `<section class="page-head"><div class="container"><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div></section>`}
-// A disponibilidade vem do catálogo: não mantemos exclusões manuais por nome.
-function isHiddenEnterprise(){return false}
+// A disponibilidade vem do catálogo; apenas cadastros que não pertencem à
+// vitrine residencial ficam protegidos também na interface.
+function isHiddenEnterprise(name){const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');return n==='aracastreetmall'||n==='testepagadoria'}
 function availableUnits(){return catalog.units.filter(u=>u.status==='disponivel'&&!isHiddenEnterprise(u.enterpriseName)&&enterpriseMedia(u.enterpriseName).visible)}
 function simulatorUnits(){return availableUnits().filter(u=>Number(u.price)>0)}
 function enterpriseDetailUrl(e){return enterpriseLinks[String(e.id)]||enterpriseLinks[e.name]||''}

@@ -753,12 +753,16 @@ function unitKey(row) {
   return textValue(pick(row, ['idunidade','id_unidade','idunidade_int','referencia','id','codigo','codigo_unidade','unidade']));
 }
 function unitKeys(row) {
-  const keys = [
+  const rawKeys = [
     pick(row, ['idunidade']),
     pick(row, ['idunidade_int']),
     pick(row, ['referencia']),
     pick(row, ['codigo','codigo_unidade']),
   ].map(textValue).filter(Boolean);
+  const enterprise = enterpriseKey(row);
+  // O mesmo número/código de unidade pode existir em empreendimentos distintos.
+  // O prefixo impede que situação ou preço de um projeto seja aplicado em outro.
+  const keys = enterprise ? rawKeys.map(key => `${enterprise}:${key}`) : rawKeys;
   return [...new Set(keys)];
 }
 function enterpriseKey(row) {
@@ -1021,15 +1025,18 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
     }
   }
 
-  // Catálogo estritamente comercial: qualquer empreendimento atual ou novo entra
+  // Catálogo residencial: qualquer empreendimento atual ou novo entra
   // automaticamente assim que possuir ao menos uma unidade disponível.
+  // Cadastros de teste e o produto exclusivamente comercial não compõem a vitrine.
+  const nonResidentialEnterpriseNames = new Set(['aracastreetmall', 'testepagadoria']);
+  const isResidentialEnterprise = name => !nonResidentialEnterpriseNames.has(normKey(name));
   const availableCommercialUnits = allUnits.filter(u =>
-    u.status === 'disponivel'
+    u.status === 'disponivel' && isResidentialEnterprise(u.enterpriseName)
   );
 
   const allEnterprises = [...enterpriseMap.values()];
   const enterprises = allEnterprises.filter(e =>
-    Number(e.unidades_disponiveis) > 0
+    Number(e.unidades_disponiveis) > 0 && isResidentialEnterprise(e.name)
   );
 
   enterprises.sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
