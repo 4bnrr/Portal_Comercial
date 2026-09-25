@@ -688,12 +688,11 @@ function lookupCommercialDashboard(index, row) {
 }
 
 async function fetchDetailedAppraisals(unitsRows) {
-  const excluded = new Set(['araca','lantai','acquaventureamerica']);
   const enterprises = new Map();
   for (const row of unitsRows) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
-    if (!id || excluded.has(normKey(name))) continue;
+    if (!id) continue;
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name });
   }
 
@@ -846,12 +845,28 @@ function extractPrice(row) {
     'valor_total','valortotal','valor_total_unidade','valorfinal'
   ]));
 }
-function priceScore(row) {
-  let score = 0;
-  if (yesValue(pick(row, ['aprovado','tabela_aprovada','aprovada']))) score += 1000;
-  if (yesValue(pick(row, ['ativo','ativa','tabela_ativa','vigente']))) score += 500;
-  score += Math.min(100, Math.floor(rowTimestamp(row) / 86400000) / 100000);
-  return score;
+function isActivePanelRow(row) {
+  const panel = normKey(pick(row, ['ativo_painel','ativopainel']));
+  if (panel) return panel === 'a' || panel === 'ativo' || panel === 's' || panel === 'sim';
+  const active = normKey(pick(row, ['ativo','ativa','tabela_ativa','vigente']));
+  return !active || ['a','ativo','s','sim','1','true'].includes(active);
+}
+function priceTableTimestamp(row) {
+  const raw = pick(row, [
+    'data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia',
+    'data_vigencia_ate','datavigenciaate','vigencia_ate','fim_vigencia'
+  ]);
+  const parsed = raw ? Date.parse(String(raw).replace(' ', 'T')) : NaN;
+  return Number.isFinite(parsed) ? parsed : rowTimestamp(row);
+}
+function priceTableId(row) {
+  return intValue(pick(row, ['idtabela','id_tabela','idtabela_int'])) || 0;
+}
+function isEnterprisePanelActive(row) {
+  const panel = normKey(pick(row, ['ativo_painel','ativopainel']));
+  // O CVDW atual não expõe esse campo em todas as contas. Quando vier informado,
+  // publicamos somente o estado A; quando vier ausente, a disponibilidade decide.
+  return !panel || panel === 'a' || panel === 'ativo';
 }
 function bestPriceByUnit(rows) {
   const groups = new Map();
@@ -868,22 +883,21 @@ function bestPriceByUnit(rows) {
       const p = extractPrice(r);
       return p !== null && p > 0;
     });
-    const pool = positives.length ? positives : list;
+    const active = positives.filter(isActivePanelRow);
+    const pool = active.length ? active : (positives.length ? positives : list);
     pool.sort((a,b) => {
-      const sd = priceScore(b) - priceScore(a);
-      if (sd) return sd;
+      const vd = priceTableTimestamp(b) - priceTableTimestamp(a);
+      if (vd) return vd;
+      const tableIdDifference = priceTableId(b) - priceTableId(a);
+      if (tableIdDifference) return tableIdDifference;
       const td = rowTimestamp(b) - rowTimestamp(a);
       if (td) return td;
       return rowReference(b) - rowReference(a);
     });
-    const topScore = pool.length ? priceScore(pool[0]) : 0;
-    const equiv = positives.filter(r => priceScore(r) === topScore);
-    const chosen = (equiv.length ? equiv : pool).reduce((best, r) => {
-      if (!best) return r;
-      const bp = extractPrice(best), rp = extractPrice(r);
-      if (rp && (!bp || rp < bp)) return r;
-      return best;
-    }, null) || {};
+    // A publicação considera a tabela ativa mais recente, mesmo ainda não aprovada.
+    // Não escolhemos o menor valor entre tabelas diferentes, pois isso poderia
+    // manter no portal uma tabela antiga depois da entrada de uma nova vigência.
+    const chosen = pool[0] || {};
     for (const row of list) for (const key of unitKeys(row)) alias.set(key, chosen);
   }
   return alias;
@@ -957,7 +971,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
 function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), commercialDashboards = new Map()) {
   const situationIndex = latestByUnit(situationRows);
   const priceIndex = bestPriceByUnit(priceRows);
-  const allUnits = unitsRows.map(row => {
+  const allUnits = unitsRows.filter(isEnterprisePanelActive).map(row => {
     const enterpriseId = String(enterpriseKey(row));
     const enterpriseAppraisals = appraisalByEnterprise.get(enterpriseId) || null;
     const enterpriseDashboard = commercialDashboards.get(enterpriseId) || null;
@@ -1007,17 +1021,15 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
     }
   }
 
-  // V10: catálogo estritamente comercial. Só publica unidades DISPONÍVEIS.
-  // Mantém as exclusões comerciais já adotadas na vitrine.
-  const excludedEnterpriseNames = new Set(['araca', 'lantai', 'acquaventureamerica']);
-  const isExcludedEnterprise = name => excludedEnterpriseNames.has(normKey(name));
+  // Catálogo estritamente comercial: qualquer empreendimento atual ou novo entra
+  // automaticamente assim que possuir ao menos uma unidade disponível.
   const availableCommercialUnits = allUnits.filter(u =>
-    u.status === 'disponivel' && !isExcludedEnterprise(u.enterpriseName)
+    u.status === 'disponivel'
   );
 
   const allEnterprises = [...enterpriseMap.values()];
   const enterprises = allEnterprises.filter(e =>
-    Number(e.unidades_disponiveis) > 0 && !isExcludedEnterprise(e.name)
+    Number(e.unidades_disponiveis) > 0
   );
 
   enterprises.sort((a,b) => a.name.localeCompare(b.name, 'pt-BR'));
