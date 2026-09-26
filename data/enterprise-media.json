@@ -12,7 +12,7 @@
     "displayName": "Acqua Venture América",
     "image": "/assets/empreendimentos/acqua-venture-america.jpg",
     "url": "https://estacao1construtora.com.br/imovel/acqua-venture-america/",
-    "visible": true,
+    "visible": false,
     "highlights": []
   },
   "acquaventureamericaii": {
@@ -95,7 +95,7 @@
     "displayName": "Allegro Residence",
     "image": "/assets/empreendimentos/allegro-residence.jpg",
     "url": "https://estacao1construtora.com.br/imovel/allegro/",
-    "visible": true,
+    "visible": false,
     "highlights": []
   },
   "atlantaresidencepark": {
@@ -103,7 +103,7 @@
     "displayName": "Atlanta Residence Park",
     "image": "/assets/empreendimentos/atlanta-residence-park.jpg",
     "url": "https://estacao1construtora.com.br/imovel/atlanta-residence-park/",
-    "visible": true,
+    "visible": false,
     "highlights": []
   },
   "atlantaresidencepark2": {

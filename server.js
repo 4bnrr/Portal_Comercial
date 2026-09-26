@@ -696,12 +696,17 @@ function lookupCommercialDashboard(index, row) {
 }
 
 async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
+  const hiddenEnterpriseNames = new Set([
+    'atlantaresidencepark',
+    'allegroresidence',
+    'acquaventureamerica',
+  ]);
   const situationIndex = latestByUnit(situationRows);
   const enterprises = new Map();
   for (const row of unitsRows) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
-    if (!id) continue;
+    if (!id || hiddenEnterpriseNames.has(normKey(name))) continue;
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name, hasAvailable: false });
     const situation = lookupUnit(situationIndex, row);
     const situationStatus = Object.keys(situation).length ? deriveStatus(situation) : null;
@@ -1071,8 +1076,14 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
   // Catálogo residencial: qualquer empreendimento atual ou novo entra
   // automaticamente assim que possuir ao menos uma unidade disponível.
   // Cadastros de teste e o produto exclusivamente comercial não compõem a vitrine.
-  const nonResidentialEnterpriseNames = new Set(['aracastreetmall', 'testepagadoria']);
-  const isResidentialEnterprise = name => !nonResidentialEnterpriseNames.has(normKey(name));
+  const hiddenEnterpriseNames = new Set([
+    'aracastreetmall',
+    'testepagadoria',
+    'atlantaresidencepark',
+    'allegroresidence',
+    'acquaventureamerica',
+  ]);
+  const isResidentialEnterprise = name => !hiddenEnterpriseNames.has(normKey(name));
   const availableCommercialUnits = allUnits.filter(u =>
     u.status === 'disponivel' && isResidentialEnterprise(u.enterpriseName)
   );
