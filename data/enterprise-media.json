@@ -90,6 +90,22 @@
     "highlights": [],
     "updatedAt": "2026-09-21T17:48:14.887Z"
   },
+  "allegroresidence": {
+    "sourceName": "Allegro Residence",
+    "displayName": "Allegro Residence",
+    "image": "/assets/empreendimentos/allegro-residence.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/allegro/",
+    "visible": true,
+    "highlights": []
+  },
+  "atlantaresidencepark": {
+    "sourceName": "Atlanta Residence Park",
+    "displayName": "Atlanta Residence Park",
+    "image": "/assets/empreendimentos/atlanta-residence-park.jpg",
+    "url": "https://estacao1construtora.com.br/imovel/atlanta-residence-park/",
+    "visible": true,
+    "highlights": []
+  },
   "atlantaresidencepark2": {
     "sourceName": "Atlanta Residence Park 2",
     "displayName": "Atlanta Residence Park 2",

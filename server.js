@@ -672,7 +672,9 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false) {
       for (const row of rows) {
         const detail = {
           price: tableSeriesValue(row, /valordevenda/) ?? extractPrice(row),
-          status: deriveStatus(row),
+          // Tabelas antigas são usadas apenas como fonte de preço. A situação
+          // atual continua vindo de /unidades/situacao para não reabrir vendas.
+          status: allowAnyTable ? null : deriveStatus(row),
           tableName,
         };
         for (const key of detailedUnitKeys(row)) index.set(key, detail);
