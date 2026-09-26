@@ -760,7 +760,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       const parsed = collectDetailedUnitAppraisals(payload);
       perEnterprise.set(String(enterprise.id), parsed.index);
       const dashboardEligible = [...dashboard.values()].some(row =>
-        row.status === 'disponivel' && Number(row.price) > 0
+        Number(row.price) > 0 && (allowAnyTable || row.status === 'disponivel')
       );
       if (dashboardEligible) commercialDashboards.set(String(enterprise.id), dashboard);
       diagnostics.push({
