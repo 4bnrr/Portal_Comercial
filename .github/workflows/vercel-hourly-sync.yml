@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: vercel-hourly-cvcrm-sync
@@ -31,12 +31,21 @@ jobs:
 
       - name: Consultar CVCRM e publicar catalogo
         env:
-          CRON_SECRET: ${{ secrets.VERCEL_CRON_SECRET }}
           CVCRM_DOMAIN: ${{ secrets.CVCRM_DOMAIN }}
           CVCRM_EMAIL: ${{ secrets.CVCRM_EMAIL }}
           CVCRM_TOKEN: ${{ secrets.CVCRM_TOKEN }}
           CVCRM_REQUEST_GAP_MS: 3200
           CVCRM_PHASE_GAP_MS: 0
           CVCRM_AUTO_SYNC: false
-          VERCEL_PUBLISH_URL: https://simuladorest1.vercel.app/api/cron/publish
         run: node server.js --sync-once
+
+      - name: Gerar catalogo estatico
+        run: npm run build:static-data
+
+      - name: Salvar catalogo atualizado
+        run: |
+          git config user.name "estacao1-sync"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/data/bootstrap.json
+          git diff --cached --quiet || git commit -m "data: atualiza catalogo CVCRM"
+          git push

@@ -15,6 +15,7 @@ let priceHistory = { rows: [], summary: [] };
 let adminEnterpriseData = { entries: [], pending: [] };
 let backups = [];
 let readOnlyPortal = false;
+let staticPortal = false;
 
 
 const fmtBRL = value => value == null || Number.isNaN(Number(value)) ? '—' : Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -23,6 +24,19 @@ const escapeHtml = s => String(s ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':
 const toast = (msg,error=false) => { toastEl.textContent=msg;toastEl.className='toast show'+(error?' error':'');setTimeout(()=>toastEl.className='toast',3500); };
 async function api(url, options={}) { const r=await fetch(url,options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||j.message||`Erro ${r.status}`); return j; }
 async function loadAll(){
+  if(location.hostname.endsWith('.vercel.app')){
+    const bootstrap=await api('/data/bootstrap.json');
+    catalog=bootstrap.catalog||catalog;
+    enterpriseLinks=bootstrap.enterpriseLinks||{};
+    paymentPlanRules=bootstrap.paymentPlanRules||paymentPlanRules;
+    enterpriseMediaConfig=bootstrap.enterpriseMedia||{};
+    priceHistory=bootstrap.priceHistory||priceHistory;
+    readOnlyPortal=true;
+    staticPortal=true;
+    document.querySelector('nav a[data-route="administracao"]')?.remove();
+    updateHeader();
+    return;
+  }
   [catalog,enterpriseLinks,paymentPlanRules,enterpriseMediaConfig,priceHistory]=await Promise.all([
     api('/api/catalog'),
     api('/api/enterprise-links'),
@@ -971,6 +985,6 @@ if(name==='administracao'&&adminAuthenticated){
 }
 if(name==='materiais'){document.querySelector('#uploadForm')?.addEventListener('submit',async e=>{e.preventDefault();const btn=e.submitter;btn.disabled=true;try{await api('/api/materials',{method:'POST',body:new FormData(e.currentTarget)});materials=await api('/api/materials');toast('Material publicado.');route()}catch(err){toast(err.message,true)}finally{btn.disabled=false}});document.querySelectorAll('[data-delete-material]').forEach(btn=>btn.addEventListener('click',async()=>{if(!confirm('Remover este material?'))return;try{await api('/api/materials/'+btn.dataset.deleteMaterial,{method:'DELETE'});materials=await api('/api/materials');route()}catch(err){toast(err.message,true)}}))}
 if(name==='atualizacoes'){document.querySelector('#syncBtn')?.addEventListener('click',async e=>{e.currentTarget.disabled=true;e.currentTarget.textContent='Iniciando...';try{await api('/api/sync',{method:'POST'});toast('Sincronização iniciada. Você pode acompanhar o progresso nesta tela.');await loadAll();route()}catch(err){toast(err.message,true);await loadAll();route()}})}}
-setInterval(async()=>{try{catalog=await api('/api/status');updateHeader()}catch{}},30000);
+setInterval(async()=>{if(staticPortal)return;try{catalog=await api('/api/status');updateHeader()}catch{}},300000);
 window.addEventListener('hashchange',route);document.querySelector('#menuBtn').addEventListener('click',()=>document.querySelector('#nav').classList.toggle('open'));document.querySelector('#nav').addEventListener('click',()=>document.querySelector('#nav').classList.remove('open'));
 loadAll().then(route).catch(err=>{app.innerHTML=`<div class="container section"><div class="empty"><h2>Não foi possível carregar o portal.</h2><p>${escapeHtml(err.message)}</p></div></div>`});

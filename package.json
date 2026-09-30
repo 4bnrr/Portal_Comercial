@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "build:static-data": "node scripts/build-static-data.mjs",
     "test": "node tests-payment-plan.mjs"
   },
   "dependencies": {

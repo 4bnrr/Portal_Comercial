@@ -1662,26 +1662,24 @@ if (autoSyncEnabled) {
 if (SYNC_ONCE_MODE) {
   const publishUrl = String(process.env.VERCEL_PUBLISH_URL || '').trim();
   const publishSecret = String(process.env.CRON_SECRET || '');
-  if (!publishUrl || !publishSecret) {
-    throw new Error('VERCEL_PUBLISH_URL e CRON_SECRET são obrigatórios no modo --sync-once.');
-  }
-
   const result = await syncCvcrm('github-actions');
-  const catalog = readJson(CACHE_FILE, emptyCache);
-  const response = await fetch(publishUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${publishSecret}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(catalog),
-    signal: AbortSignal.timeout(120000),
-  });
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(`Falha ao publicar catálogo na Vercel (HTTP ${response.status}): ${responseText.slice(0, 500)}`);
+  if (publishUrl && publishSecret) {
+    const catalog = readJson(CACHE_FILE, emptyCache);
+    const response = await fetch(publishUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${publishSecret}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(catalog),
+      signal: AbortSignal.timeout(120000),
+    });
+    const responseText = await response.text();
+    if (!response.ok) {
+      throw new Error(`Falha ao publicar catálogo na Vercel (HTTP ${response.status}): ${responseText.slice(0, 500)}`);
+    }
   }
-  console.log(`[CVCRM] Sincronização e publicação concluídas: ${result.unitsNormalized} unidades.`);
+  console.log(`[CVCRM] Sincronização concluída: ${result.unitsNormalized} unidades.`);
 }
 
 export default app;
