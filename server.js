@@ -645,7 +645,12 @@ function collectDetailedUnitAppraisals(payload) {
 
 function lookupDetailedAppraisal(index, row) {
   if (!index) return null;
-  for (const key of detailedUnitKeys(row)) {
+  const keys = detailedUnitKeys(row);
+  const hasBlockIdentity = keys.some(key => key.startsWith('blockunit:'));
+  for (const key of keys) {
+    // Números como 101 e 601 se repetem em blocos diferentes. Quando o bloco
+    // está disponível, nunca usamos apenas o número da unidade como identidade.
+    if (hasBlockIdentity && key.startsWith('unit:')) continue;
     if (index.has(key)) return index.get(key);
   }
   return null;
@@ -689,7 +694,10 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false) {
 
 function lookupCommercialDashboard(index, row) {
   if (!index) return null;
-  for (const key of detailedUnitKeys(row)) {
+  const keys = detailedUnitKeys(row);
+  const hasBlockIdentity = keys.some(key => key.startsWith('blockunit:'));
+  for (const key of keys) {
+    if (hasBlockIdentity && key.startsWith('unit:')) continue;
     if (index.has(key)) return index.get(key);
   }
   return null;
@@ -737,7 +745,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       let payload = genericPayload;
       let allowAnyTable = false;
       let dashboard = collectCommercialDashboardRows(genericPayload);
-      let selectedTable = null;
+      let selectedTables = [];
 
       // A rota genérica pode continuar retornando uma Dashboard antiga mesmo depois
       // do lançamento de uma nova tabela. Por isso, para empreendimentos com estoque,
@@ -758,21 +766,36 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
             if (dateDifference) return dateDifference;
             return priceTableId(b) - priceTableId(a);
           });
-        const latestTable = tables[0];
-        if (latestTable) {
-          selectedTable = latestTable;
-          const tableId = pick(latestTable, ['idtabela','id_tabela']);
-          const latestPayload = await cvGetConventional(
-            `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
-            { tabelasemjson: 'true' }
-          );
-          const latestDashboard = collectCommercialDashboardRows(latestPayload, true);
+        const isVertex = normKey(enterprise.name).includes('vertexgetulio');
+        const approvedCurrentMonthTables = tables.filter(table =>
+          isCurrentMonthPriceTable(table) && isApprovedPriceTable(table)
+        );
+        // O Vertex possui tabelas mensais complementares por grupo de blocos.
+        // Lemos todas as aprovadas do mês para não descartar os blocos 04 e 05
+        // ao selecionar apenas a tabela de maior ID (blocos 01, 02 e 03).
+        selectedTables = isVertex && approvedCurrentMonthTables.length
+          ? approvedCurrentMonthTables
+          : tables.slice(0, 1);
+        if (selectedTables.length) {
+          const selectedPayloads = [];
+          const combinedDashboard = new Map();
+          for (const table of selectedTables) {
+            const tableId = pick(table, ['idtabela','id_tabela']);
+            const tablePayload = await cvGetConventional(
+              `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
+              { tabelasemjson: 'true' }
+            );
+            selectedPayloads.push(tablePayload);
+            for (const [key, value] of collectCommercialDashboardRows(tablePayload, true)) {
+              if (!combinedDashboard.has(key)) combinedDashboard.set(key, value);
+            }
+          }
           // A partir do momento em que uma tabela mensal foi selecionada, a
           // Dashboard genérica antiga deixa de ser fonte comercial, mesmo se a
           // tabela nova vier sem linhas. Assim setembro nunca sobrescreve outubro.
-          payload = latestPayload;
+          payload = selectedPayloads;
           allowAnyTable = true;
-          dashboard = latestDashboard;
+          dashboard = combinedDashboard;
         }
       }
       const parsed = collectDetailedUnitAppraisals(payload);
@@ -791,10 +814,12 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         dashboardMatches: dashboard.size,
         dashboardEligible,
         fallbackTable: allowAnyTable,
-        selectedTableId: selectedTable ? priceTableId(selectedTable) : null,
-        selectedTableName: selectedTable ? textValue(pick(selectedTable, ['nome','tabela','nome_tabela','nometabela'])) : null,
-        selectedTableStart: selectedTable ? textValue(pick(selectedTable, ['data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia'])) : null,
-        selectedCurrentMonth: selectedTable ? isCurrentMonthPriceTable(selectedTable) : false,
+        selectedTableId: selectedTables[0] ? priceTableId(selectedTables[0]) : null,
+        selectedTableName: selectedTables[0] ? textValue(pick(selectedTables[0], ['nome','tabela','nome_tabela','nometabela'])) : null,
+        selectedTableStart: selectedTables[0] ? textValue(pick(selectedTables[0], ['data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia'])) : null,
+        selectedCurrentMonth: selectedTables[0] ? isCurrentMonthPriceTable(selectedTables[0]) : false,
+        selectedTableIds: selectedTables.map(priceTableId),
+        selectedTableNames: selectedTables.map(table => textValue(pick(table, ['nome','tabela','nome_tabela','nometabela']))),
         sample: payload,
       });
     } catch (error) {
@@ -919,6 +944,12 @@ function isActivePanelRow(row) {
   if (panel) return panel === 'a' || panel === 'ativo' || panel === 's' || panel === 'sim';
   const active = normKey(pick(row, ['ativo','ativa','tabela_ativa','vigente']));
   return !active || ['a','ativo','s','sim','1','true'].includes(active);
+}
+function isApprovedPriceTable(row) {
+  const approval = normKey(pick(row, [
+    'aprovado','aprovada','status_aprovacao','statusaprovacao','situacao_aprovacao','situacaoaprovacao'
+  ]));
+  return ['s','sim','1','true','aprovado','aprovada','a'].includes(approval);
 }
 function priceTableTimestamp(row) {
   const raw = pick(row, [
