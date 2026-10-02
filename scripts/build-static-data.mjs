@@ -66,6 +66,31 @@ const bootstrap = {
   priceHistory: buildPriceHistory(priceRows),
 };
 
+function deploymentSignature(value) {
+  const historySummary = (value?.priceHistory?.summary || []).map(row => ({
+    enterpriseName: row.enterpriseName,
+    latestPrice: row.latestPrice,
+    previousPrice: row.previousPrice,
+    change: row.change,
+  }));
+  return JSON.stringify({
+    enterprises: value?.catalog?.enterprises || [],
+    units: value?.catalog?.units || [],
+    enterpriseLinks: value?.enterpriseLinks || {},
+    paymentPlanRules: value?.paymentPlanRules || {},
+    enterpriseMedia: value?.enterpriseMedia || {},
+    historySummary,
+  });
+}
+
 fs.mkdirSync(outputDir, { recursive: true });
-fs.writeFileSync(path.join(outputDir, 'bootstrap.json'), JSON.stringify(bootstrap));
-console.log(`Catálogo estático gerado: ${bootstrap.catalog.enterprises.length} empreendimentos, ${bootstrap.catalog.units.length} unidades.`);
+const outputFile = path.join(outputDir, 'bootstrap.json');
+let existing = null;
+try { existing = JSON.parse(fs.readFileSync(outputFile, 'utf8')); } catch {}
+
+if (existing && deploymentSignature(existing) === deploymentSignature(bootstrap)) {
+  console.log(`Catálogo sem alterações públicas: ${bootstrap.catalog.enterprises.length} empreendimentos, ${bootstrap.catalog.units.length} unidades.`);
+} else {
+  fs.writeFileSync(outputFile, JSON.stringify(bootstrap));
+  console.log(`Catálogo estático atualizado: ${bootstrap.catalog.enterprises.length} empreendimentos, ${bootstrap.catalog.units.length} unidades.`);
+}
