@@ -733,19 +733,26 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       totalRecords: enterprises.size,
     });
     try {
-      let payload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
+      const genericPayload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
+      let payload = genericPayload;
       let allowAnyTable = false;
-      let dashboard = collectCommercialDashboardRows(payload);
+      let dashboard = collectCommercialDashboardRows(genericPayload);
+      let selectedTable = null;
 
-      // Algumas tabelas disponíveis (como a do Allegro) não aparecem na rota
-      // genérica nem no CVDW. Nesse caso, listamos as tabelas do empreendimento,
-      // escolhemos a vigência mais recente sem exigir aprovação e consultamos seu ID.
-      if (!dashboard.size && enterprise.hasAvailable) {
+      // A rota genérica pode continuar retornando uma Dashboard antiga mesmo depois
+      // do lançamento de uma nova tabela. Por isso, para empreendimentos com estoque,
+      // sempre consultamos a lista e priorizamos a tabela ativa de vigência mais recente.
+      // A aprovação não é exigida: ativo_painel = A é suficiente para publicação.
+      if (enterprise.hasAvailable) {
         const tableList = await cvGetConventional(
           `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco`
         );
-        const tables = (Array.isArray(tableList) ? tableList : recordArray(tableList))
-          .filter(table => table && pick(table, ['idtabela','id_tabela']))
+        const listedTables = (Array.isArray(tableList) ? tableList : recordArray(tableList))
+          .filter(table => table && pick(table, ['idtabela','id_tabela']));
+        const activeTables = listedTables.filter(isActivePanelRow);
+        const eligibleTables = activeTables.length ? activeTables : listedTables;
+        const currentMonthTables = eligibleTables.filter(isCurrentMonthPriceTable);
+        const tables = (currentMonthTables.length ? currentMonthTables : eligibleTables)
           .sort((a, b) => {
             const dateDifference = priceTableTimestamp(b) - priceTableTimestamp(a);
             if (dateDifference) return dateDifference;
@@ -753,13 +760,19 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           });
         const latestTable = tables[0];
         if (latestTable) {
+          selectedTable = latestTable;
           const tableId = pick(latestTable, ['idtabela','id_tabela']);
-          payload = await cvGetConventional(
+          const latestPayload = await cvGetConventional(
             `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
             { tabelasemjson: 'true' }
           );
+          const latestDashboard = collectCommercialDashboardRows(latestPayload, true);
+          // A partir do momento em que uma tabela mensal foi selecionada, a
+          // Dashboard genérica antiga deixa de ser fonte comercial, mesmo se a
+          // tabela nova vier sem linhas. Assim setembro nunca sobrescreve outubro.
+          payload = latestPayload;
           allowAnyTable = true;
-          dashboard = collectCommercialDashboardRows(payload, true);
+          dashboard = latestDashboard;
         }
       }
       const parsed = collectDetailedUnitAppraisals(payload);
@@ -778,6 +791,10 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         dashboardMatches: dashboard.size,
         dashboardEligible,
         fallbackTable: allowAnyTable,
+        selectedTableId: selectedTable ? priceTableId(selectedTable) : null,
+        selectedTableName: selectedTable ? textValue(pick(selectedTable, ['nome','tabela','nome_tabela','nometabela'])) : null,
+        selectedTableStart: selectedTable ? textValue(pick(selectedTable, ['data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia'])) : null,
+        selectedCurrentMonth: selectedTable ? isCurrentMonthPriceTable(selectedTable) : false,
         sample: payload,
       });
     } catch (error) {
@@ -832,7 +849,7 @@ function yesValue(v) {
 function rowTimestamp(row) {
   const raw = pick(row, ['referencia_data','data_referencia','datareferencia','updated_at','atualizado_em','data_atualizacao']);
   if (!raw) return 0;
-  const t = Date.parse(String(raw).replace(' ', 'T'));
+  const t = parseCvcrmDate(raw);
   return Number.isFinite(t) ? t : 0;
 }
 function rowReference(row) {
@@ -908,8 +925,43 @@ function priceTableTimestamp(row) {
     'data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia',
     'data_vigencia_ate','datavigenciaate','vigencia_ate','fim_vigencia'
   ]);
-  const parsed = raw ? Date.parse(String(raw).replace(' ', 'T')) : NaN;
+  const parsed = raw ? parseCvcrmDate(raw) : NaN;
   return Number.isFinite(parsed) ? parsed : rowTimestamp(row);
+}
+function parseCvcrmDate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return NaN;
+  const br = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (br) {
+    return Date.UTC(
+      Number(br[3]), Number(br[2]) - 1, Number(br[1]),
+      Number(br[4] || 0), Number(br[5] || 0), Number(br[6] || 0)
+    );
+  }
+  const parsed = Date.parse(raw.replace(' ', 'T'));
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+function monthKey(timestamp) {
+  if (!Number.isFinite(timestamp)) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit'
+  }).formatToParts(new Date(timestamp));
+  const year = parts.find(part => part.type === 'year')?.value;
+  const month = parts.find(part => part.type === 'month')?.value;
+  return year && month ? `${year}-${month}` : '';
+}
+function priceTableMonthKey(row) {
+  const raw = textValue(pick(row, [
+    'data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia'
+  ]));
+  const iso = raw.match(/^(\d{4})-(\d{2})-\d{2}/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  const br = raw.match(/^\d{1,2}\/(\d{1,2})\/(\d{4})/);
+  if (br) return `${br[2]}-${String(Number(br[1])).padStart(2, '0')}`;
+  return monthKey(priceTableTimestamp(row));
+}
+function isCurrentMonthPriceTable(row, now = Date.now()) {
+  return priceTableMonthKey(row) === monthKey(now);
 }
 function priceTableId(row) {
   return intValue(pick(row, ['idtabela','id_tabela','idtabela_int'])) || 0;
