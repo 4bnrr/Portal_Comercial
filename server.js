@@ -1079,7 +1079,12 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     : (hasSituationRow && situationStatus !== 'indisponivel' ? situationRow : baseRow);
   const eId = enterpriseKey(identitySource) || enterpriseName(identitySource);
   const id = unitKey(identitySource) || crypto.createHash('sha1').update(JSON.stringify(baseRow)).digest('hex').slice(0,14);
-  const price = dashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow);
+  // Quando há tabelas mensais específicas do Vertex, unidades ausentes nelas
+  // não podem herdar preços da Dashboard genérica antiga.
+  const currentVertexTableMatch = !vertexRow || !preserveBaseIdentity || Boolean(dashboardRow);
+  const price = currentVertexTableMatch
+    ? (dashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow))
+    : null;
 
   return {
     id,
@@ -1102,7 +1107,9 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     appraisal: detailedAppraisal ?? numberValue(pick(combined, ['VALOR DO IMÓVEL (1x)','VALOR DO IMOVEL (1x)','valor_do_imovel_1x','valor_imovel_1x','valordoimovel1x','valor_imovel','valor do imovel','valor do imóvel','valor_avaliacao','valoravaliacao','avaliacao','valor_de_avaliacao'])),
     status: dashboardRow?.status || resolvedStatus,
     statusReason: textValue(pick(statusSource, ['situacao_bloqueada_motivo','situacao_reservada_nomesituacao','motivo'])),
-    tableName: textValue(dashboardRow?.tableName || pick(priceRow, ['tabela','tabela_preco','tabelapreco','nome_tabela','nometabela','tabela_preco_nome'])),
+    tableName: currentVertexTableMatch
+      ? textValue(dashboardRow?.tableName || pick(priceRow, ['tabela','tabela_preco','tabelapreco','nome_tabela','nometabela','tabela_preco_nome']))
+      : '',
     hasSituation: hasSituationRow,
     hasPrice: price !== null && price > 0,
     updatedAt: textValue(pick(statusSource, ['referencia_data','data_referencia','datareferencia','updated_at','atualizado_em']), new Date().toISOString()),
