@@ -174,11 +174,11 @@ function varandaCategory(u){
     const configuredFloor=configured.match(/^(\d+)º andar$/i);
     if(configuredFloor){
       const floor=Number(configuredFloor[1]);
-      return floor>=1&&floor<=12?`${floor}º andar`:'';
+      return floor>=1?`${floor}º andar`:'';
     }
     const floor=Number(u.floor);
     if(Number.isFinite(floor)&&floor===0) return 'Térreo';
-    if(Number.isFinite(floor)&&floor>=1&&floor<=12) return `${floor}º andar`;
+    if(Number.isFinite(floor)&&floor>=1) return `${floor}º andar`;
     return '';
   }
 

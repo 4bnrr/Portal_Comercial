@@ -718,9 +718,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name, hasAvailable: false });
     const situation = lookupUnit(situationIndex, row);
     const situationStatus = Object.keys(situation).length ? deriveStatus(situation) : null;
-    const status = situationStatus && situationStatus !== 'indisponivel'
-      ? situationStatus
-      : deriveStatus(row);
+    const status = isVertexUnit(row)
+      ? (intValue(pick(row, ['situacao_para_venda','situacaoparavenda'])) === 1 ? 'disponivel' : 'indisponivel')
+      : (situationStatus && situationStatus !== 'indisponivel' ? situationStatus : deriveStatus(row));
     if (status === 'disponivel') enterprises.get(String(id)).hasAvailable = true;
   }
 
@@ -767,14 +767,13 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
             return priceTableId(b) - priceTableId(a);
           });
         const isVertex = normKey(enterprise.name).includes('vertexgetulio');
-        const approvedCurrentMonthTables = tables.filter(table =>
-          isCurrentMonthPriceTable(table) && isApprovedPriceTable(table)
-        );
+        const activeCurrentMonthTables = tables.filter(isCurrentMonthPriceTable);
         // O Vertex possui tabelas mensais complementares por grupo de blocos.
-        // Lemos todas as aprovadas do mês para não descartar os blocos 04 e 05
+        // Lemos todas as ativas do mês (a aprovação não é obrigatória) para não
+        // descartar os blocos 04 e 05
         // ao selecionar apenas a tabela de maior ID (blocos 01, 02 e 03).
-        selectedTables = isVertex && approvedCurrentMonthTables.length
-          ? approvedCurrentMonthTables
+        selectedTables = isVertex && activeCurrentMonthTables.length
+          ? activeCurrentMonthTables
           : tables.slice(0, 1);
         if (selectedTables.length) {
           const selectedPayloads = [];
@@ -945,12 +944,6 @@ function isActivePanelRow(row) {
   const active = normKey(pick(row, ['ativo','ativa','tabela_ativa','vigente']));
   return !active || ['a','ativo','s','sim','1','true'].includes(active);
 }
-function isApprovedPriceTable(row) {
-  const approval = normKey(pick(row, [
-    'aprovado','aprovada','status_aprovacao','statusaprovacao','situacao_aprovacao','situacaoaprovacao'
-  ]));
-  return ['s','sim','1','true','aprovado','aprovada','a'].includes(approval);
-}
 function priceTableTimestamp(row) {
   const raw = pick(row, [
     'data_vigencia_de','datavigenciade','vigencia_de','inicio_vigencia',
@@ -1040,12 +1033,16 @@ function bestPriceByUnit(rows) {
 function isVertexUnit(row) {
   return enterpriseKey(row) === '121' || normKey(enterpriseName(row)).includes('vertexgetulio');
 }
-function vertexFloorLabel(row) {
+function vertexFloorNumber(row) {
   let floor = intValue(pick(row, ['andar','pavimento']));
   if (floor === null) {
     const unitNumber = intValue(pick(row, ['nome','unidade','numero_unidade','numerounidade']));
-    if (unitNumber !== null && unitNumber >= 1) floor = unitNumber <= 99 ? 0 : Math.floor(unitNumber / 100);
+    if (unitNumber !== null && unitNumber >= 0) floor = Math.floor(unitNumber / 100);
   }
+  return floor;
+}
+function vertexFloorLabel(row) {
+  const floor = vertexFloorNumber(row);
   if (floor === null) return textValue(pick(row, ['tipologia']), 'Andar não informado');
   return floor === 0 ? 'Térreo' : `${floor}º andar`;
 }
@@ -1053,7 +1050,7 @@ function vertexCommercialType(row) {
   const raw = normKey(pick(row, [
     'tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade'
   ]));
-  return raw.includes('varanda') ? 'Com varanda' : 'Padrão';
+  return raw.includes('varanda') && !raw.includes('semvaranda') ? 'Com varanda' : 'Padrão';
 }
 function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, dashboardRow = null, preserveBaseIdentity = false) {
   const combined = { ...baseRow, ...situationRow, ...priceRow };
@@ -1068,10 +1065,18 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
   const hasSituationRow = Object.keys(situationRow).length > 0;
   const situationStatus = hasSituationRow ? deriveStatus(situationRow) : null;
   const baseStatus = deriveStatus(baseRow);
-  const resolvedStatus = hasSituationRow && situationStatus !== 'indisponivel'
-    ? situationStatus
-    : baseStatus;
-  const statusSource = hasSituationRow && situationStatus !== 'indisponivel' ? situationRow : baseRow;
+  // No Vertex, /unidades é a fonte atual de disponibilidade. A rota
+  // /unidades/situacao mantém registros históricos e estava ocultando unidades
+  // Padrão e Com varanda que voltaram a ficar disponíveis.
+  const vertexRow = isVertexUnit(baseRow);
+  const vertexAvailable = vertexRow
+    && intValue(pick(baseRow, ['situacao_para_venda','situacaoparavenda'])) === 1;
+  const resolvedStatus = vertexRow
+    ? (vertexAvailable ? 'disponivel' : 'indisponivel')
+    : (hasSituationRow && situationStatus !== 'indisponivel' ? situationStatus : baseStatus);
+  const statusSource = vertexRow
+    ? baseRow
+    : (hasSituationRow && situationStatus !== 'indisponivel' ? situationRow : baseRow);
   const eId = enterpriseKey(identitySource) || enterpriseName(identitySource);
   const id = unitKey(identitySource) || crypto.createHash('sha1').update(JSON.stringify(baseRow)).digest('hex').slice(0,14);
   const price = dashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow);
@@ -1090,7 +1095,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
     suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),
     tower: textValue(pick(identitySource, ['bloco','torre','nome_bloco','nomebloco','bloco_nome'])),
-    floor: intValue(pick(identitySource, ['andar','pavimento'])),
+    floor: vertexRow ? vertexFloorNumber(baseRow) : intValue(pick(identitySource, ['andar','pavimento'])),
     area: numberValue(pick(identitySource, ['area_privativa','areaprivativa','area_privativa_total','area_total','areatotal','area'])),
     parkingSpaces: intValue(pick(identitySource, ['vagas_garagem','qtde_vagas_garagem','vagas','vagasgaragem','quantidade_vagas'])),
     price,
