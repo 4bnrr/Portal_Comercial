@@ -298,6 +298,7 @@ let lastCvRequestAt = 0;
 const CVCRM_MIN_GAP_MS = Math.max(3200, Number(process.env.CVCRM_REQUEST_GAP_MS || 3200));
 const CVCRM_PHASE_GAP_MS = Math.max(0, Number(process.env.CVCRM_PHASE_GAP_MS || 0));
 const CVCRM_429_MIN_COOLDOWN_MS = Math.max(60000, Number(process.env.CVCRM_429_COOLDOWN_MS || 60000));
+const CVCRM_TRANSIENT_RETRY_DELAY_MS = Math.max(1000, Number(process.env.CVCRM_TRANSIENT_RETRY_DELAY_MS || 10000));
 
 let syncProgress = {
   phase: 'idle',
@@ -374,6 +375,37 @@ async function waitCvcrmSlot() {
   lastCvRequestAt = Date.now();
 }
 
+async function fetchCvcrmWithSingleRetry(url, optionsFactory, requestLabel, errorPrefix) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await waitCvcrmSlot();
+
+    try {
+      const response = await fetch(url, optionsFactory());
+      const bodyText = await response.text();
+      return { response, bodyText };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+
+      if (attempt === 1) {
+        console.warn(`[CVCRM] Falha transitória em ${requestLabel}: ${detail}. Repetindo a consulta uma vez.`);
+        await waitCountdown(CVCRM_TRANSIENT_RETRY_DELAY_MS, `Nova tentativa de ${requestLabel}`);
+        setProgress({ endpoint: new URL(url).pathname, phase: 'requesting' });
+        continue;
+      }
+
+      const err = new Error(`${errorPrefix}: ${detail} (falhou após 2 tentativas)`);
+      err.cause = error;
+      throw err;
+    }
+  }
+
+  throw new Error(`${errorPrefix}: número máximo de tentativas excedido.`);
+}
+
+function isTransientHttpStatus(status) {
+  return status === 408 || status === 425 || (status >= 500 && status <= 599);
+}
+
 function retryAfterMs(response, attempt) {
   const raw = response.headers.get('retry-after');
   let serverWait = 0;
@@ -397,14 +429,14 @@ async function cvGet(endpoint, page, pageSize = 500) {
   url.searchParams.set('pagina', String(page));
   url.searchParams.set('registros_por_pagina', String(pageSize));
 
+  let transientHttpRetries = 0;
   for (let attempt = 0; attempt < 4; attempt++) {
-    await waitCvcrmSlot();
     setProgress({ endpoint, phase: 'requesting' });
 
     const started = Date.now();
-    let response;
-    try {
-      response = await fetch(url, {
+    const { response, bodyText } = await fetchCvcrmWithSingleRetry(
+      url,
+      () => ({
         method: 'GET',
         headers: {
           email: process.env.CVCRM_EMAIL,
@@ -412,14 +444,11 @@ async function cvGet(endpoint, page, pageSize = 500) {
           Accept: 'application/json',
         },
         signal: AbortSignal.timeout(60000),
-      });
-    } catch (error) {
-      const err = new Error(`Falha de rede ao consultar CVCRM: ${error instanceof Error ? error.message : String(error)}`);
-      err.cause = error;
-      throw err;
-    }
+      }),
+      `${endpoint} página ${page}`,
+      'Falha de rede ao consultar CVCRM',
+    );
 
-    const bodyText = await response.text();
     let body;
     try { body = JSON.parse(bodyText); }
     catch { body = { mensagem: bodyText.slice(0, 3000) }; }
@@ -427,6 +456,14 @@ async function cvGet(endpoint, page, pageSize = 500) {
     console.log(`[CVCRM] GET ${endpoint} página ${page} -> HTTP ${response.status} (${Date.now() - started} ms)`);
 
     if (response.ok) return body;
+
+    if (isTransientHttpStatus(response.status) && transientHttpRetries < 1) {
+      transientHttpRetries++;
+      console.warn(`[CVCRM] HTTP ${response.status} em ${endpoint} página ${page}. Repetindo a consulta uma vez.`);
+      await waitCountdown(CVCRM_TRANSIENT_RETRY_DELAY_MS, `Nova tentativa de ${endpoint} página ${page}`);
+      attempt--;
+      continue;
+    }
 
     if (response.status === 429) {
       const waitMs = retryAfterMs(response, attempt);
@@ -508,15 +545,15 @@ async function cvGetConventional(endpoint, params = {}) {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
   }
 
+  let transientHttpRetries = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
     // Mantemos o mesmo espaçamento conservador entre chamadas para não disputar
     // requisições com o CVDW, mesmo a API convencional possuindo limite próprio.
-    await waitCvcrmSlot();
     setProgress({ endpoint, phase: 'requesting' });
     const started = Date.now();
-    let response;
-    try {
-      response = await fetch(url, {
+    const { response, bodyText } = await fetchCvcrmWithSingleRetry(
+      url,
+      () => ({
         method: 'GET',
         headers: {
           email: process.env.CVCRM_EMAIL,
@@ -524,18 +561,25 @@ async function cvGetConventional(endpoint, params = {}) {
           Accept: 'application/json',
         },
         signal: AbortSignal.timeout(90000),
-      });
-    } catch (error) {
-      throw new Error(`Falha de rede ao consultar tabela detalhada do CVCRM: ${error instanceof Error ? error.message : String(error)}`);
-    }
+      }),
+      endpoint,
+      'Falha de rede ao consultar tabela detalhada do CVCRM',
+    );
 
-    const bodyText = await response.text();
     let body;
     try { body = JSON.parse(bodyText); }
     catch { body = { mensagem: bodyText.slice(0, 5000) }; }
 
     console.log(`[CVCRM] GET ${endpoint} -> HTTP ${response.status} (${Date.now() - started} ms)`);
     if (response.ok) return body;
+
+    if (isTransientHttpStatus(response.status) && transientHttpRetries < 1) {
+      transientHttpRetries++;
+      console.warn(`[CVCRM] HTTP ${response.status} em ${endpoint}. Repetindo a consulta uma vez.`);
+      await waitCountdown(CVCRM_TRANSIENT_RETRY_DELAY_MS, `Nova tentativa de ${endpoint}`);
+      attempt--;
+      continue;
+    }
 
     if (response.status === 429) {
       const waitMs = retryAfterMs(response, attempt);
