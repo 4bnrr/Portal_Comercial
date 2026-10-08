@@ -18,6 +18,22 @@
   },
   "rules": [
     {
+      "id": "vertex-getulio",
+      "name": "Vertex Getúlio — negociação 7%",
+      "remunerationType": "percentual",
+      "realEstatePercent": 3.5,
+      "fixedCommission": 0,
+      "coordinationPercent": 0,
+      "totalRiskLimitPercent": 7,
+      "maxBuilderPercent": 3.5,
+      "enterprisePatterns": ["Vertex Getúlio", "Vertex Getulio"],
+      "typologyPatterns": [],
+      "developmentTypePatterns": [],
+      "validFrom": null,
+      "validUntil": null,
+      "enabled": true
+    },
+    {
       "id": "atlanta-2-casas",
       "name": "Atlanta 2 — casas",
       "remunerationType": "fixed",

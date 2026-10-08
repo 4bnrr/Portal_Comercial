@@ -349,6 +349,8 @@ function wireMoneyField(el){
   el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.querySelector('#calcBtn')?.click()}});
 }
 function simulator(){
+  const enterpriseOptions=[...new Set(simulatorChoices().map(x=>x.enterpriseName))]
+    .sort((a,b)=>a.localeCompare(b,'pt-BR'));
   return pageHead(
     'Simulação comercial',
     'Simulador de entrada',
@@ -381,7 +383,7 @@ function simulator(){
           </div>
         </div>
         <div class="sim-advanced-filters">
-          <div class="field"><label>Empreendimento</label><select id="filterEnterprise" class="select"><option value="">Todos</option>${[...new Set(simulatorChoices().map(x=>x.enterpriseName))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(enterpriseDisplayName(x))}</option>`).join('')}</select></div>
+          <div class="field"><label>Empreendimentos</label><details id="filterEnterprise" class="multi-select"><summary><span id="filterEnterpriseLabel">Todos os empreendimentos</span></summary><div class="multi-select-menu"><button id="clearEnterpriseFilter" class="multi-select-all" type="button">Todos os empreendimentos</button>${enterpriseOptions.map(x=>`<label class="multi-select-option"><input type="checkbox" value="${escapeHtml(x)}" data-enterprise-filter><span>${escapeHtml(enterpriseDisplayName(x))}</span></label>`).join('')}</div></details></div>
           <div class="field"><label>Tipologia</label><select id="filterTypology" class="select"><option value="">Todas</option>${[...new Set(simulatorChoices().map(x=>varandaCategory(x)||'Geral'))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(x=>`<option>${escapeHtml(x)}</option>`).join('')}</select></div>
           <div class="field"><label>Entrada máxima</label><input id="maxEntry" class="input" inputmode="decimal" placeholder="Sem limite"></div>
         </div>
@@ -415,6 +417,17 @@ function simulator(){
     </div>
   </div></section>`;
 }
+function selectedEnterpriseFilters(){
+  return new Set([...document.querySelectorAll('[data-enterprise-filter]:checked')].map(input=>input.value));
+}
+function updateEnterpriseFilterLabel(){
+  const selected=[...document.querySelectorAll('[data-enterprise-filter]:checked')];
+  const label=document.querySelector('#filterEnterpriseLabel');
+  if(!label)return;
+  if(!selected.length){label.textContent='Todos os empreendimentos';return}
+  if(selected.length===1){label.textContent=enterpriseDisplayName(selected[0].value);return}
+  label.textContent=`${selected.length} empreendimentos selecionados`;
+}
 function buildSimulationResults(){
   const financing=Math.max(0,parseMoney(document.querySelector('#financing')?.value));
   const subsidy=Math.max(0,parseMoney(document.querySelector('#subsidy')?.value));
@@ -422,7 +435,7 @@ function buildSimulationResults(){
   const clientName=String(document.querySelector('#clientName')?.value||'').trim();
   const pct=80;
   if(!financing){toast('Informe o financiamento aprovado.',true);return []}
-  const filterEnterprise=String(document.querySelector('#filterEnterprise')?.value||'');
+  const filterEnterprises=selectedEnterpriseFilters();
   const filterTypology=String(document.querySelector('#filterTypology')?.value||'');
   const maxEntry=Math.max(0,parseMoney(document.querySelector('#maxEntry')?.value));
   return simulatorChoices().map((u,index)=>{
@@ -434,7 +447,7 @@ function buildSimulationResults(){
     const capped=appraisal>0&&financing>appraisalLimit;
     return {index,unit:u,clientId,clientName,sale,appraisal,financingApproved:financing,financingEffective,subsidy,appraisalLimit,maxFinancingPercent:pct,entry,capped};
   }).filter(r=>{
-    if(filterEnterprise && r.unit.enterpriseName!==filterEnterprise)return false;
+    if(filterEnterprises.size && !filterEnterprises.has(r.unit.enterpriseName))return false;
     if(filterTypology && (varandaCategory(r.unit)||'Geral')!==filterTypology)return false;
     if(maxEntry>0 && r.entry>maxEntry)return false;
     return true;
@@ -699,7 +712,7 @@ function renderPaymentPlan(){
   const status=blocked?'OPERAÇÃO BLOQUEADA':r.status;
   const ownMsg=r.ownResourcesMinimum>0?`O cliente deverá pagar no mínimo ${fmtBRL(r.ownResourcesMinimum)} com recursos próprios. O saldo poderá ser estruturado dentro da capacidade do Plano de Pagamento.`:'A entrada gerada está integralmente dentro da capacidade do Plano de Pagamento.';
   const fixed=rule.remunerationType==='fixed';
-  area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(u.enterpriseName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(u.enterpriseName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento + Subsídio</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?'A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de 13,5%.':escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
+  area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(u.enterpriseName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(u.enterpriseName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento + Subsídio</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?`A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de ${Number(r.totalRiskPercent).toLocaleString('pt-BR',{maximumFractionDigits:3})}%.`:escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
 }
 
 function printPaymentPlan(){
@@ -930,7 +943,7 @@ async function route(){
   window.scrollTo({top:0,behavior:'instant'});
 }
 function wire(name){if(name==='tabelas'){document.querySelector('#q')?.addEventListener('input',renderTable);renderTable()}
-if(name==='simulador'){const financingField=document.querySelector('#financing');const subsidyField=document.querySelector('#subsidy');const maxEntryField=document.querySelector('#maxEntry');wireMoneyField(financingField);wireMoneyField(subsidyField);wireMoneyField(maxEntryField);document.querySelector('#calcBtn')?.addEventListener('click',()=>{formatMoneyField(financingField);formatMoneyField(subsidyField);calcSimulation()});document.querySelector('#tabSimulator')?.addEventListener('click',()=>showSimulatorTab('sim'));document.querySelector('#tabPaymentPlan')?.addEventListener('click',()=>showSimulatorTab('plan'));document.querySelector('#tabCompare')?.addEventListener('click',()=>showSimulatorTab('compare'));document.querySelector('#clearCompareBtn')?.addEventListener('click',()=>{document.querySelectorAll('[data-compare-sim]').forEach(x=>x.checked=false);updateCompareCount();renderCompareTab()})}
+if(name==='simulador'){const financingField=document.querySelector('#financing');const subsidyField=document.querySelector('#subsidy');const maxEntryField=document.querySelector('#maxEntry');wireMoneyField(financingField);wireMoneyField(subsidyField);wireMoneyField(maxEntryField);document.querySelectorAll('[data-enterprise-filter]').forEach(input=>input.addEventListener('change',updateEnterpriseFilterLabel));document.querySelector('#clearEnterpriseFilter')?.addEventListener('click',()=>{document.querySelectorAll('[data-enterprise-filter]').forEach(input=>input.checked=false);updateEnterpriseFilterLabel()});document.querySelector('#calcBtn')?.addEventListener('click',()=>{formatMoneyField(financingField);formatMoneyField(subsidyField);calcSimulation()});document.querySelector('#tabSimulator')?.addEventListener('click',()=>showSimulatorTab('sim'));document.querySelector('#tabPaymentPlan')?.addEventListener('click',()=>showSimulatorTab('plan'));document.querySelector('#tabCompare')?.addEventListener('click',()=>showSimulatorTab('compare'));document.querySelector('#clearCompareBtn')?.addEventListener('click',()=>{document.querySelectorAll('[data-compare-sim]').forEach(x=>x.checked=false);updateCompareCount();renderCompareTab()})}
 if(name==='administracao'&&!adminAuthenticated){
   document.querySelector('#adminLoginForm')?.addEventListener('submit',async e=>{
     e.preventDefault();
