@@ -40,9 +40,27 @@ function buildPriceHistory(rows) {
   return { rows, summary };
 }
 
-const sourceCatalog = readJson('cache.json', readJson('vercel-cache.json', {
+const emptyCatalog = {
   lastSync: null, lastSuccess: null, status: 'not_configured', enterprises: [], units: [], stats: {},
-}));
+};
+const outputFile = path.join(outputDir, 'bootstrap.json');
+let existing = null;
+try { existing = JSON.parse(fs.readFileSync(outputFile, 'utf8')); } catch {}
+
+function catalogFreshness(catalog) {
+  const value = Date.parse(catalog?.lastSuccess || catalog?.lastSync || 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+// Em estações locais, data/cache.json pode ficar mais antigo que o catálogo
+// estático já publicado. Nunca permita que uma alteração visual faça o portal
+// regredir para essa cópia antiga. No GitHub Actions, a consulta recém-concluída
+// continua vencendo por possuir o lastSuccess mais recente.
+const sourceCatalog = [
+  readJson('cache.json', null),
+  readJson('vercel-cache.json', null),
+  existing?.catalog || null,
+].filter(Boolean).sort((a, b) => catalogFreshness(b) - catalogFreshness(a))[0] || emptyCatalog;
 const enterpriseMedia = readJson('enterprise-media.json', {});
 const hiddenNames = new Set(['aracastreetmall', 'testepagadoria', 'atlantaresidencepark', 'allegroresidence', 'acquaventureamerica']);
 const enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
@@ -84,9 +102,6 @@ function deploymentSignature(value) {
 }
 
 fs.mkdirSync(outputDir, { recursive: true });
-const outputFile = path.join(outputDir, 'bootstrap.json');
-let existing = null;
-try { existing = JSON.parse(fs.readFileSync(outputFile, 'utf8')); } catch {}
 
 if (existing && deploymentSignature(existing) === deploymentSignature(bootstrap)) {
   console.log(`Catálogo sem alterações públicas: ${bootstrap.catalog.enterprises.length} empreendimentos, ${bootstrap.catalog.units.length} unidades.`);
