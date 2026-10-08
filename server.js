@@ -774,6 +774,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
   let position = 0;
   for (const enterprise of [...enterprises.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))) {
     position++;
+    const isVertex = normKey(enterprise.name).includes('vertexgetulio');
     const endpoint = `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/detalhada`;
     setProgress({
       phase: 'fetching-appraisals',
@@ -785,7 +786,10 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       totalRecords: enterprises.size,
     });
     try {
-      const genericPayload = await cvGetConventional(endpoint, { tabelasemjson: 'true' });
+      const genericPayload = await cvGetConventional(endpoint, {
+        tabelasemjson: 'true',
+        ...(isVertex ? { aprovado: 'S', painel: 'corretor' } : {}),
+      });
       let payload = genericPayload;
       let allowAnyTable = false;
       let dashboard = collectCommercialDashboardRows(genericPayload);
@@ -794,26 +798,28 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       // A rota genérica pode continuar retornando uma Dashboard antiga mesmo depois
       // do lançamento de uma nova tabela. Por isso, para empreendimentos com estoque,
       // sempre consultamos a lista e priorizamos a tabela ativa de vigência mais recente.
-      // A aprovação não é exigida: ativo_painel = A é suficiente para publicação.
+      // No Vertex, publicamos apenas tabelas aprovadas. O estado AP do painel é
+      // retornado pela API v1 como aprovado = S.
       if (enterprise.hasAvailable) {
         const tableList = await cvGetConventional(
-          `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco`
+          `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco`,
+          isVertex ? { aprovado: 'S' } : {}
         );
         const listedTables = (Array.isArray(tableList) ? tableList : recordArray(tableList))
           .filter(table => table && pick(table, ['idtabela','id_tabela']));
-        const activeTables = listedTables.filter(isActivePanelRow);
-        const eligibleTables = activeTables.length ? activeTables : listedTables;
+        const approvedTables = isVertex ? listedTables.filter(isApprovedPriceTable) : listedTables;
+        const activeTables = approvedTables.filter(isActivePanelRow);
+        const eligibleTables = activeTables.length ? activeTables : approvedTables;
         const currentMonthTables = eligibleTables.filter(isCurrentMonthPriceTable);
-        const tables = (currentMonthTables.length ? currentMonthTables : eligibleTables)
+        const tables = (isVertex ? currentMonthTables : (currentMonthTables.length ? currentMonthTables : eligibleTables))
           .sort((a, b) => {
             const dateDifference = priceTableTimestamp(b) - priceTableTimestamp(a);
             if (dateDifference) return dateDifference;
             return priceTableId(b) - priceTableId(a);
           });
-        const isVertex = normKey(enterprise.name).includes('vertexgetulio');
         const activeCurrentMonthTables = tables.filter(isCurrentMonthPriceTable);
         // O Vertex possui tabelas mensais complementares por grupo de blocos.
-        // Lemos todas as ativas do mês (a aprovação não é obrigatória) para não
+        // Lemos todas as aprovadas e ativas do mês para não
         // descartar os blocos 04 e 05
         // ao selecionar apenas a tabela de maior ID (blocos 01, 02 e 03).
         selectedTables = isVertex && activeCurrentMonthTables.length
@@ -826,7 +832,10 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
             const tableId = pick(table, ['idtabela','id_tabela']);
             const tablePayload = await cvGetConventional(
               `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
-              { tabelasemjson: 'true' }
+              {
+                tabelasemjson: 'true',
+                ...(isVertex ? { aprovado: 'S', painel: 'corretor' } : {}),
+              }
             );
             selectedPayloads.push(tablePayload);
             for (const [key, value] of collectCommercialDashboardRows(tablePayload, true)) {
@@ -839,6 +848,13 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           payload = selectedPayloads;
           allowAnyTable = true;
           dashboard = combinedDashboard;
+        } else if (isVertex) {
+          // Sem tabela aprovada do mês, o Vertex não herda Dashboard antiga nem
+          // tabela pendente. As unidades voltam a aparecer quando o CVCRM expuser
+          // uma tabela do mês no estado AP/aprovado = S.
+          payload = [];
+          allowAnyTable = true;
+          dashboard = new Map();
         }
       }
       const parsed = collectDetailedUnitAppraisals(payload);
@@ -987,6 +1003,15 @@ function isActivePanelRow(row) {
   if (panel) return panel === 'a' || panel === 'ativo' || panel === 's' || panel === 'sim';
   const active = normKey(pick(row, ['ativo','ativa','tabela_ativa','vigente']));
   return !active || ['a','ativo','s','sim','1','true'].includes(active);
+}
+function isApprovedPriceTable(row) {
+  const approval = normKey(pick(row, [
+    'aprovado','status_aprovacao','statusaprovacao','situacao_aprovacao','situacaoaprovacao',
+    'status','situacao'
+  ]));
+  // O CVCRM expõe o estado interno AP como "S" no campo aprovado da API v1.
+  // Mantemos AP como alias para compatibilidade com outras versões do retorno.
+  return ['s','sim','1','true','ap','aprovado'].includes(approval);
 }
 function priceTableTimestamp(row) {
   const raw = pick(row, [
