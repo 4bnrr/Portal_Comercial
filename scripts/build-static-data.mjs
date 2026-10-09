@@ -61,6 +61,42 @@ const sourceCatalog = [
   readJson('vercel-cache.json', null),
   existing?.catalog || null,
 ].filter(Boolean).sort((a, b) => catalogFreshness(b) - catalogFreshness(a))[0] || emptyCatalog;
+const catalogCandidates = [
+  sourceCatalog,
+  readJson('cache.json', null),
+  readJson('vercel-cache.json', null),
+  existing?.catalog || null,
+].filter(Boolean);
+
+function appraisalFallbacks(catalogs) {
+  const byUnit = new Map();
+  const byVertexFloor = new Map();
+  for (const catalog of catalogs) {
+    for (const unit of catalog.units || []) {
+      const appraisal = Number(unit.appraisal);
+      if (!(appraisal > 0)) continue;
+      const exactKey = `${unit.enterpriseId}:${unit.id}`;
+      if (!byUnit.has(exactKey)) byUnit.set(exactKey, appraisal);
+      if (normKey(unit.enterpriseName).includes('vertexgetulio')) {
+        const floorKey = `${unit.enterpriseId}:${unit.commercialType || 'Padrão'}:${unit.floor}`;
+        if (!byVertexFloor.has(floorKey)) byVertexFloor.set(floorKey, new Set());
+        byVertexFloor.get(floorKey).add(appraisal);
+      }
+    }
+  }
+  return { byUnit, byVertexFloor };
+}
+
+function withPreservedAppraisal(unit, fallbacks) {
+  if (Number(unit.appraisal) > 0) return unit;
+  const exact = fallbacks.byUnit.get(`${unit.enterpriseId}:${unit.id}`);
+  if (exact > 0) return { ...unit, appraisal: exact };
+  if (!normKey(unit.enterpriseName).includes('vertexgetulio')) return unit;
+  const values = [...(fallbacks.byVertexFloor.get(`${unit.enterpriseId}:${unit.commercialType || 'Padrão'}:${unit.floor}`) || [])];
+  return values.length === 1 ? { ...unit, appraisal: values[0] } : unit;
+}
+
+const appraisalFallbackIndex = appraisalFallbacks(catalogCandidates);
 const enterpriseMedia = readJson('enterprise-media.json', {});
 const hiddenNames = new Set(['aracastreetmall', 'testepagadoria', 'atlantaresidencepark', 'allegroresidence', 'acquaventureamerica']);
 const enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
@@ -70,9 +106,9 @@ const enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
     && enterpriseMedia[key]?.visible !== false;
 });
 const visibleEnterpriseIds = new Set(enterprises.map(enterprise => String(enterprise.id)));
-const units = (sourceCatalog.units || []).filter(unit =>
-  unit.status === 'disponivel' && visibleEnterpriseIds.has(String(unit.enterpriseId))
-);
+const units = (sourceCatalog.units || [])
+  .filter(unit => unit.status === 'disponivel' && visibleEnterpriseIds.has(String(unit.enterpriseId)))
+  .map(unit => withPreservedAppraisal(unit, appraisalFallbackIndex));
 const catalog = { ...sourceCatalog, enterprises, units };
 const priceRows = readJson('price-history.json', []);
 const bootstrap = {

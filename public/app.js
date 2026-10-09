@@ -25,7 +25,7 @@ const toast = (msg,error=false) => { toastEl.textContent=msg;toastEl.className='
 async function api(url, options={}) { const r=await fetch(url,options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||j.message||`Erro ${r.status}`); return j; }
 async function loadAll(){
   if(location.hostname.endsWith('.vercel.app')){
-    const bootstrap=await api('/data/bootstrap.json');
+    const bootstrap=await api('/data/bootstrap.json',{cache:'no-store'});
     catalog=bootstrap.catalog||catalog;
     enterpriseLinks=bootstrap.enterpriseLinks||{};
     paymentPlanRules=bootstrap.paymentPlanRules||paymentPlanRules;

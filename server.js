@@ -55,6 +55,7 @@ const ENTERPRISE_MEDIA_FILE = path.join(DATA_DIR, 'enterprise-media.json');
 const PRICE_HISTORY_FILE = path.join(DATA_DIR, 'price-history.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ENTERPRISE_IMAGE_DIR = path.join(__dirname, 'public', 'assets', 'empreendimentos');
+const STATIC_BOOTSTRAP_FILE = path.join(__dirname, 'public', 'data', 'bootstrap.json');
 const MAX_HISTORY = 150;
 const VERCEL_CATALOG_BLOB_PATH = process.env.VERCEL_CATALOG_BLOB_PATH || 'estacao1/catalog.json';
 
@@ -145,7 +146,8 @@ async function persistCatalog(cache) {
 if (!IS_VERCEL) {
   if (!fs.existsSync(CACHE_FILE)) {
     const bundledVercelCache = path.join(BUNDLED_DATA_DIR, 'vercel-cache.json');
-    const initialCache = SYNC_ONCE_MODE ? readJson(bundledVercelCache, emptyCache) : emptyCache;
+    const publishedCatalog = readJson(STATIC_BOOTSTRAP_FILE, {})?.catalog || emptyCache;
+    const initialCache = SYNC_ONCE_MODE ? readJson(bundledVercelCache, publishedCatalog) : emptyCache;
     writeJson(CACHE_FILE, initialCache);
   }
   if (!fs.existsSync(MATERIALS_FILE)) writeJson(MATERIALS_FILE, []);
@@ -788,8 +790,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
     try {
       const genericPayload = await cvGetConventional(endpoint, {
         tabelasemjson: 'true',
-        ...(isVertex ? { aprovado: 'S', painel: 'corretor' } : {}),
+        ...(isVertex ? { aprovado: 'S' } : {}),
       });
+      let appraisalPayload = genericPayload;
       let payload = genericPayload;
       let allowAnyTable = false;
       let dashboard = collectCommercialDashboardRows(genericPayload);
@@ -846,6 +849,10 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           // Dashboard genérica antiga deixa de ser fonte comercial, mesmo se a
           // tabela nova vier sem linhas. Assim setembro nunca sobrescreve outubro.
           payload = selectedPayloads;
+          // A Dashboard mais recente pode conter o preço sem a série
+          // "VALOR DO IMÓVEL". A avaliação continua sendo lida também da rota
+          // detalhada aprovada, sem permitir que ela substitua o preço mensal.
+          appraisalPayload = [genericPayload, ...selectedPayloads];
           allowAnyTable = true;
           dashboard = combinedDashboard;
         } else if (isVertex) {
@@ -857,7 +864,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           dashboard = new Map();
         }
       }
-      const parsed = collectDetailedUnitAppraisals(payload);
+      const parsed = collectDetailedUnitAppraisals(appraisalPayload);
       perEnterprise.set(String(enterprise.id), parsed.index);
       const dashboardEligible = [...dashboard.values()].some(row =>
         Number(row.price) > 0 && (allowAnyTable || row.status === 'disponivel')
@@ -1263,6 +1270,41 @@ function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnt
 
   return { units, enterprises, allUnits, allEnterprises };
 }
+
+function preservePreviousAppraisals(merged, previousCache) {
+  const previousUnits = Array.isArray(previousCache?.units) ? previousCache.units : [];
+  const byUnit = new Map();
+  const byVertexFloor = new Map();
+  const isVertexCatalogUnit = unit =>
+    String(unit?.enterpriseId) === '121' || normKey(unit?.enterpriseName).includes('vertexgetulio');
+
+  for (const unit of previousUnits) {
+    const appraisal = Number(unit?.appraisal);
+    if (!(appraisal > 0)) continue;
+    byUnit.set(`${unit.enterpriseId}:${unit.id}`, appraisal);
+    if (isVertexCatalogUnit(unit)) {
+      const key = `${unit.enterpriseId}:${textValue(unit.commercialType, 'Padrão')}:${unit.floor}`;
+      if (!byVertexFloor.has(key)) byVertexFloor.set(key, new Set());
+      byVertexFloor.get(key).add(appraisal);
+    }
+  }
+
+  const apply = unit => {
+    if (Number(unit?.appraisal) > 0) return;
+    const exact = byUnit.get(`${unit.enterpriseId}:${unit.id}`);
+    if (exact > 0) {
+      unit.appraisal = exact;
+      return;
+    }
+    if (!isVertexCatalogUnit(unit)) return;
+    const key = `${unit.enterpriseId}:${textValue(unit.commercialType, 'Padrão')}:${unit.floor}`;
+    const values = [...(byVertexFloor.get(key) || [])];
+    if (values.length === 1) unit.appraisal = values[0];
+  };
+
+  for (const unit of merged.allUnits || []) apply(unit);
+  for (const unit of merged.units || []) apply(unit);
+}
 function buildIntegrity(unitsRows, situationRows, priceRows, merged, errors = []) {
   const available = merged.units.filter(u => u.status === 'disponivel');
   const availableWithPrice = available.filter(u => u.price !== null && u.price > 0);
@@ -1361,6 +1403,7 @@ async function syncCvcrm(trigger = 'manual') {
     });
 
     merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.commercialDashboards);
+    preservePreviousAppraisals(merged, previousCache);
     // Empreendimentos liberados recentemente não devem sumir da vitrine por uma
     // inconsistência temporária entre unidades, situações e tabelas de preço.
     const requiredEnterpriseIds = new Set(['121', '122']);
