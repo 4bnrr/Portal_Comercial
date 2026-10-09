@@ -703,6 +703,7 @@ function printSimulation(){
     const typology=category
       ? category.charAt(0).toUpperCase()+category.slice(1).replace('-', ' ')
       : (r.unit?.developmentType?.toLowerCase().includes('casa')?'Casa':'—');
+    const totalApproved=Math.max(0,Number(r.financingEffective||0))+Math.max(0,Number(r.subsidy||0));
     return `<tr>
       <td>${String(i+1).padStart(2,'0')}</td>
       <td><b>${escapeHtml(r.unit?enterpriseDisplayName(r.unit.enterpriseName):'—')}</b></td>
@@ -711,6 +712,7 @@ function printSimulation(){
       <td>${r.appraisal?fmtBRL(r.appraisal):'—'}</td>
       <td>${fmtBRL(r.financingEffective)}</td>
       <td>${fmtBRL(r.subsidy)}</td>
+      <td>${fmtBRL(totalApproved)}</td>
       <td><b>${fmtBRL(r.entry)}</b></td>
     </tr>`;
   }).join('');
@@ -749,6 +751,7 @@ function printSimulation(){
           <th>Avaliação</th>
           <th>Financ. efetivo</th>
           <th>Subsídio</th>
+          <th>Total Aprovado</th>
           <th>Entrada</th>
         </tr>
       </thead>

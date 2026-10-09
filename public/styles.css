@@ -579,13 +579,14 @@ footer{border-top:1px solid var(--line);padding:28px 0;background:#fff}
     overflow-wrap:anywhere;
   }
   .sim-print-table th:nth-child(1),.sim-print-table td:nth-child(1){width:4%;text-align:center}
-  .sim-print-table th:nth-child(2),.sim-print-table td:nth-child(2){width:24%}
-  .sim-print-table th:nth-child(3),.sim-print-table td:nth-child(3){width:12%}
-  .sim-print-table th:nth-child(4),.sim-print-table td:nth-child(4){width:12%;text-align:right}
-  .sim-print-table th:nth-child(5),.sim-print-table td:nth-child(5){width:12%;text-align:right}
+  .sim-print-table th:nth-child(2),.sim-print-table td:nth-child(2){width:19%}
+  .sim-print-table th:nth-child(3),.sim-print-table td:nth-child(3){width:9%}
+  .sim-print-table th:nth-child(4),.sim-print-table td:nth-child(4){width:11%;text-align:right}
+  .sim-print-table th:nth-child(5),.sim-print-table td:nth-child(5){width:11%;text-align:right}
   .sim-print-table th:nth-child(6),.sim-print-table td:nth-child(6){width:13%;text-align:right}
-  .sim-print-table th:nth-child(7),.sim-print-table td:nth-child(7){width:11%;text-align:right}
-  .sim-print-table th:nth-child(8),.sim-print-table td:nth-child(8){width:12%;text-align:right}
+  .sim-print-table th:nth-child(7),.sim-print-table td:nth-child(7){width:9%;text-align:right}
+  .sim-print-table th:nth-child(8),.sim-print-table td:nth-child(8){width:13%;text-align:right}
+  .sim-print-table th:nth-child(9),.sim-print-table td:nth-child(9){width:11%;text-align:right}
   .sim-print-table td:nth-child(n+4){
     white-space:nowrap;
     overflow-wrap:normal;
