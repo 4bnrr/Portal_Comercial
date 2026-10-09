@@ -1992,25 +1992,32 @@ main{
   width:16px;
   height:16px;
 }
-.sim-vertex-group{grid-column:1/-1;border:1px solid #e5e7eb;border-radius:20px;background:#fff;box-shadow:0 8px 28px rgba(17,24,39,.055);overflow:hidden}
-.sim-vertex-group-toggle{display:flex;align-items:center;justify-content:space-between;gap:24px;width:100%;padding:24px 26px;border:0;border-left:4px solid var(--red);background:#fff;color:var(--ink);text-align:left;cursor:pointer}
-.sim-vertex-group-toggle:hover{background:#fcfcfd}
-.sim-vertex-group-toggle h3{margin:5px 0 4px;font-size:22px;letter-spacing:-.025em}
-.sim-vertex-group-toggle small{color:var(--muted);font-size:11px}
-.sim-vertex-group-entry{display:flex;flex-direction:column;align-items:flex-end;flex:0 0 auto}
-.sim-vertex-group-entry strong{margin:4px 0 8px;color:var(--red);font-size:26px;letter-spacing:-.035em}
-.sim-vertex-group-entry span{color:var(--red);font-size:11px;font-weight:800}
-.sim-vertex-options{padding:0 24px 24px;border-top:1px solid #eef0f2;background:#fafbfc}
-.sim-vertex-options-head{display:flex;justify-content:space-between;gap:18px;padding:18px 2px;color:#25292f}
-.sim-vertex-options-head small{color:var(--muted)}
-.sim-vertex-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.sim-vertex-summary-card{height:100%}
+.sim-vertex-summary-card .sim-card-actions{justify-content:flex-start}
+.sim-vertex-summary-card .sim-card-actions .btn{width:100%}
+.sim-vertex-summary-note{min-height:48px;display:flex;align-items:center}
+body.sim-modal-open{overflow:hidden}
+.sim-vertex-modal{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:24px}
+.sim-vertex-modal[hidden]{display:none!important}
+.sim-vertex-modal-backdrop{position:absolute;inset:0;border:0;background:rgba(18,22,28,.58);cursor:pointer}
+.sim-vertex-modal-dialog{position:relative;width:min(980px,100%);max-height:min(720px,90vh);overflow:hidden;border:1px solid #e1e4e8;border-radius:20px;background:#fff;box-shadow:0 28px 80px rgba(0,0,0,.24)}
+.sim-vertex-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:22px 24px;border-bottom:1px solid #eceef1}
+.sim-vertex-modal-head h3{margin:5px 0 3px;font-size:23px}
+.sim-vertex-modal-head small{color:var(--muted)}
+.sim-vertex-modal-close{width:38px;height:38px;flex:0 0 auto;border:1px solid #dde1e5;border-radius:10px;background:#fff;color:#555;font-size:25px;line-height:1;cursor:pointer}
+.sim-vertex-table-wrap{max-height:calc(min(720px,90vh) - 105px);overflow:auto;padding:0 24px 22px}
+.sim-vertex-table{width:100%;border-collapse:collapse;min-width:760px}
+.sim-vertex-table th{position:sticky;top:0;z-index:1;padding:13px 12px;background:#f6f7f8;color:#676d75;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:.055em}
+.sim-vertex-table td{padding:13px 12px;border-bottom:1px solid #eceef1;font-size:12px;white-space:nowrap}
+.sim-vertex-entry-value{color:var(--red)}
+.sim-vertex-row-actions{display:flex;align-items:center;gap:10px}
+.sim-vertex-row-actions .sim-compare-option{margin:0;padding:5px}
 @media(max-width:700px){
-  .sim-vertex-group-toggle{align-items:flex-start;padding:20px 18px;gap:14px}
-  .sim-vertex-group-toggle h3{font-size:19px}
-  .sim-vertex-group-entry strong{font-size:20px}
-  .sim-vertex-options{padding:0 12px 14px}
-  .sim-vertex-options-head{flex-direction:column;gap:5px;padding:15px 2px}
-  .sim-vertex-grid{grid-template-columns:1fr}
+  .sim-vertex-modal{padding:10px}
+  .sim-vertex-modal-dialog{max-height:94vh;border-radius:16px}
+  .sim-vertex-modal-head{padding:17px 16px}
+  .sim-vertex-modal-head h3{font-size:19px}
+  .sim-vertex-table-wrap{max-height:calc(94vh - 95px);padding:0 12px 14px}
   .sim-results-below .sim-result-top{
     align-items:flex-start;
     padding:20px 20px 16px 24px;
@@ -2522,6 +2529,15 @@ main{
   .sim-results-below .sim-card-actions .btn::after{
     content:"Plano";
     font-size:9px;
+  }
+  .sim-results-below .sim-vertex-summary-card .sim-card-actions{
+    grid-template-columns:1fr;
+  }
+  .sim-results-below .sim-vertex-summary-card .sim-card-actions .btn{
+    width:100%;
+  }
+  .sim-results-below .sim-vertex-summary-card .sim-card-actions .btn::after{
+    content:"Tipologias";
   }
   .sim-results-below .sim-compare-option{
     gap:3px;

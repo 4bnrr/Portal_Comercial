@@ -500,17 +500,31 @@ function renderSimulationResults(results){
     renderedVertexGroups.add(type);
     const vertexResults=vertexGroups.get(type)||[];
     const reference=vertexResults[0];
-    const detailId=`simVertexOptions-${normalizeEnterpriseName(type)}`;
-    return `<section class="sim-vertex-group">
-      <button class="sim-vertex-group-toggle" type="button" data-vertex-sim-toggle data-target="${detailId}" aria-expanded="false">
-        <div><span class="eyebrow">empreendimento</span><h3>${escapeHtml(enterpriseDisplayName(reference.result.unit.enterpriseName))} • ${escapeHtml(type)}</h3><small>${vertexResults.length.toLocaleString('pt-BR')} tipologias de andar disponíveis</small></div>
-        <div class="sim-vertex-group-entry"><small>Menor entrada</small><strong>${fmtBRL(reference.result.entry)}</strong><span data-vertex-toggle-label>Ver tipologias ↓</span></div>
-      </button>
-      <div id="${detailId}" class="sim-vertex-options" hidden>
-        <div class="sim-vertex-options-head"><b>Tipologias do Vertex Getúlio • ${escapeHtml(type)}</b><small>Escolha um andar para acessar o Plano de Pagamento ou comparar.</small></div>
-        <div class="sim-vertex-grid">${vertexResults.map(item=>simulationResultCard(item.result,item.index)).join('')}</div>
+    const detailId=`simVertexModal-${normalizeEnterpriseName(type)}`;
+    return `<article class="sim-result-card sim-vertex-summary-card">
+      <div class="sim-result-top">
+        <div><span class="sim-result-index">VERTEX</span><h3>${escapeHtml(enterpriseDisplayName(reference.result.unit.enterpriseName))} • ${escapeHtml(type)}</h3></div>
+        <div class="sim-result-entry sim-result-entry-highlight"><small>Menor entrada</small><strong>${fmtBRL(reference.result.entry)}</strong></div>
       </div>
-    </section>`;
+      <div class="sim-result-grid">
+        <div><small>Menor valor de venda</small><b>${fmtBRL(reference.result.sale)}</b></div>
+        <div><small>Valor da avaliação</small><b>${reference.result.appraisal?fmtBRL(reference.result.appraisal):'Não informado'}</b></div>
+        <div><small>Financiamento efetivo</small><b>${fmtBRL(reference.result.financingEffective)}</b></div>
+        <div><small>Andares disponíveis</small><b>${vertexResults.length.toLocaleString('pt-BR')}</b></div>
+      </div>
+      <div class="sim-ok sim-vertex-summary-note">Clique abaixo para consultar somente os andares disponíveis e seus respectivos valores.</div>
+      <div class="sim-card-actions"><button class="btn primary btn-small" type="button" data-vertex-sim-toggle data-target="${detailId}" aria-expanded="false">Ver tipologias</button></div>
+    </article>`;
+  }).join('');
+  const vertexModals=[...vertexGroups.entries()].map(([type,vertexResults])=>{
+    const detailId=`simVertexModal-${normalizeEnterpriseName(type)}`;
+    return `<div id="${detailId}" class="sim-vertex-modal" hidden>
+      <button class="sim-vertex-modal-backdrop" type="button" data-vertex-modal-close aria-label="Fechar tipologias"></button>
+      <section class="sim-vertex-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="${detailId}-title">
+        <div class="sim-vertex-modal-head"><div><span class="eyebrow">tipologias disponíveis</span><h3 id="${detailId}-title">Vertex Getúlio • ${escapeHtml(type)}</h3><small>Somente andares com unidades disponíveis para venda.</small></div><button class="sim-vertex-modal-close" type="button" data-vertex-modal-close aria-label="Fechar">×</button></div>
+        <div class="sim-vertex-table-wrap"><table class="sim-vertex-table"><thead><tr><th>Tipologia</th><th>Venda</th><th>Avaliação</th><th>Entrada</th><th>Ações</th></tr></thead><tbody>${vertexResults.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item.result.unit)||commercialRowLabel(item.result.unit))}</b></td><td>${fmtBRL(item.result.sale)}</td><td>${item.result.appraisal?fmtBRL(item.result.appraisal):'—'}</td><td><b class="sim-vertex-entry-value">${fmtBRL(item.result.entry)}</b></td><td><div class="sim-vertex-row-actions"><button class="btn primary btn-small" type="button" data-plan-sim="${item.index}">Simular</button><label class="sim-compare-option"><input type="checkbox" data-compare-sim="${item.index}"><span>Comparar</span></label></div></td></tr>`).join('')}</tbody></table></div>
+      </section>
+    </div>`;
   }).join('');
   area.innerHTML=`
     <div class="sim-results-head">
@@ -525,15 +539,21 @@ function renderSimulationResults(results){
     </div>
     <div id="simComparison"></div><div class="sim-result-list">
       ${cards}
-    </div>`;
+    </div>${vertexModals}`;
   area.querySelectorAll('[data-vertex-sim-toggle]').forEach(button=>button.addEventListener('click',e=>{
-    const details=area.querySelector(`#${e.currentTarget.dataset.target}`);
-    if(!details)return;
-    const opening=details.hidden;
-    details.hidden=!opening;
-    e.currentTarget.setAttribute('aria-expanded',String(opening));
-    const label=e.currentTarget.querySelector('[data-vertex-toggle-label]');
-    if(label)label.textContent=opening?'Ocultar tipologias ↑':'Ver tipologias ↓';
+    const modal=area.querySelector(`#${e.currentTarget.dataset.target}`);
+    if(!modal)return;
+    modal.hidden=false;
+    e.currentTarget.setAttribute('aria-expanded','true');
+    document.body.classList.add('sim-modal-open');
+    modal.querySelector('.sim-vertex-modal-close')?.focus();
+  }));
+  area.querySelectorAll('[data-vertex-modal-close]').forEach(button=>button.addEventListener('click',e=>{
+    const modal=e.currentTarget.closest('.sim-vertex-modal');
+    if(!modal)return;
+    modal.hidden=true;
+    document.body.classList.remove('sim-modal-open');
+    area.querySelector(`[data-vertex-sim-toggle][data-target="${modal.id}"]`)?.setAttribute('aria-expanded','false');
   }));
   area.querySelectorAll('[data-compare-sim]').forEach(cb=>{
     cb.addEventListener('change',()=>{
@@ -549,7 +569,7 @@ function renderSimulationResults(results){
   area.querySelector('#printAllSimulation')?.addEventListener('click',printSimulation);
   area.querySelectorAll('[data-plan-sim]').forEach(btn=>btn.addEventListener('click',()=>{
     const r=lastSimulationResults[Number(btn.dataset.planSim)];
-    if(r){selectedSimulationUnit=r.unit;lastSimulation=r;showSimulatorTab('plan')}
+    if(r){document.body.classList.remove('sim-modal-open');area.querySelectorAll('.sim-vertex-modal').forEach(modal=>modal.hidden=true);selectedSimulationUnit=r.unit;lastSimulation=r;showSimulatorTab('plan')}
   }));
 }
 function selectedCompareIndices(){
