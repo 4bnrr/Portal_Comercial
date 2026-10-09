@@ -224,7 +224,7 @@ function enterpriseVarandaMinimumRows(){
     const enterprise=String(u.enterpriseName||'').trim();
     if(!enterprise) continue;
 
-    const vertexType=isVertexCommercialRow(u)?String(u.commercialType||'Padrão').trim():'';
+    const vertexType=isVertexCommercialRow(u)?vertexCommercialTypeLabel(u):'';
     const key=`${enterprise.toLocaleLowerCase('pt-BR')}|${vertexType.toLocaleLowerCase('pt-BR')}`;
     let g=byEnterprise.get(key);
     if(!g){
@@ -272,13 +272,25 @@ function enterpriseVarandaMinimumRows(){
     return (a._categoryOrder??order[a._kind]??99)-(b._categoryOrder??order[b._kind]??99) || Number(a.price)-Number(b.price);
   });
 }
-function commercialRowLabel(r){return String(r._displayLabel||r.enterpriseName||'')}
+function commercialRowLabel(r){return String(r._displayLabel||enterpriseDisplayName(r.enterpriseName)||'')}
 function isVertexCommercialRow(r){
   const enterprise=normalizeEnterpriseName(r?.enterpriseName);
   return enterprise.includes('vertexgetulio')||enterprise.includes('residencialvertexfragamaia');
 }
+function isVertexFragaMaia(r){
+  const enterprise=normalizeEnterpriseName(typeof r==='string'?r:r?.enterpriseName);
+  return enterprise.includes('residencialvertexfragamaia')||enterprise==='vertexfragamaia';
+}
+function vertexCommercialTypeLabel(r){
+  if(isVertexFragaMaia(r)) return '';
+  return String(r?.commercialType||'Padrão').trim()||'Padrão';
+}
+function vertexCommercialDisplayName(enterpriseName,type){
+  const base=enterpriseDisplayName(enterpriseName);
+  return type?`${base} • ${type}`:base;
+}
 function vertexCommercialGroupKey(r){
-  const type=String(r?.commercialType||'Padrão').trim()||'Padrão';
+  const type=vertexCommercialTypeLabel(r);
   return `${normalizeEnterpriseName(r?.enterpriseName)}|${normalizeEnterpriseName(type)}`;
 }
 function tables(){return pageHead('Consulta comercial','Tabelas de preços','Menor valor disponível por empreendimento e tipologia comercial, com o respectivo valor de avaliação da unidade utilizada como referência.')+`<section class="section prices-section"><div class="container"><div class="price-search-panel"><div class="price-search-copy"><div class="eyebrow">Consulta rápida</div><strong>Encontre um empreendimento</strong><small>Pesquise pelo nome do empreendimento ou pela tipologia exibida.</small></div><div class="filters price-filters"><input id="q" class="input price-search-input" placeholder="Buscar empreendimento"></div></div><div id="tableArea"></div></div></section>`}
@@ -290,14 +302,14 @@ function renderTable(){
   if(vertexRows.length){
     const vertexGroups=new Map();
     for(const row of vertexRows){
-      const type=String(row.commercialType||'Padrão').trim();
+      const type=vertexCommercialTypeLabel(row);
       const key=vertexCommercialGroupKey(row);
       if(!vertexGroups.has(key)) vertexGroups.set(key,{type,enterpriseName:row.enterpriseName,rows:[]});
       vertexGroups.get(key).rows.push(row);
     }
     for(const {type,enterpriseName,rows} of vertexGroups.values()){
       const reference=rows.slice().sort((a,b)=>Number(a.price)-Number(b.price))[0];
-      entries.push({kind:'vertex',row:reference,rows,commercialType:type,enterpriseName:`${enterpriseDisplayName(enterpriseName)} • ${type}`});
+      entries.push({kind:'vertex',row:reference,rows,commercialType:type,enterpriseName:vertexCommercialDisplayName(enterpriseName,type)});
     }
   }
   const visibleEntries=entries
@@ -503,16 +515,17 @@ function renderSimulationResults(results){
   const renderedVertexGroups=new Set();
   const cards=indexedResults.map(({result,index})=>{
     if(!isVertexCommercialRow(result.unit))return simulationResultCard(result,index);
-    const type=String(result.unit.commercialType||'Padrão').trim()||'Padrão';
+    const type=vertexCommercialTypeLabel(result.unit);
     const groupKey=vertexCommercialGroupKey(result.unit);
     if(renderedVertexGroups.has(groupKey))return '';
     renderedVertexGroups.add(groupKey);
     const vertexResults=vertexGroups.get(groupKey)||[];
     const reference=vertexResults[0];
-    const detailId=`simVertexModal-${normalizeEnterpriseName(result.unit.enterpriseName)}-${normalizeEnterpriseName(type)}`;
+    const detailId=`simVertexModal-${normalizeEnterpriseName(result.unit.enterpriseName)}-${normalizeEnterpriseName(type)||'geral'}`;
+    const displayName=vertexCommercialDisplayName(reference.result.unit.enterpriseName,type);
     return `<article class="sim-result-card sim-vertex-summary-card">
       <div class="sim-result-top">
-        <div><span class="sim-result-index">VERTEX</span><h3>${escapeHtml(enterpriseDisplayName(reference.result.unit.enterpriseName))} • ${escapeHtml(type)}</h3></div>
+        <div><span class="sim-result-index">VERTEX</span><h3>${escapeHtml(displayName)}</h3></div>
         <div class="sim-result-entry sim-result-entry-highlight"><small>Menor entrada</small><strong>${fmtBRL(reference.result.entry)}</strong></div>
       </div>
       <div class="sim-result-grid">
@@ -527,13 +540,13 @@ function renderSimulationResults(results){
   }).join('');
   const vertexModals=[...vertexGroups.values()].map(vertexResults=>{
     const reference=vertexResults[0];
-    const type=String(reference.result.unit.commercialType||'Padrão').trim()||'Padrão';
-    const enterpriseName=enterpriseDisplayName(reference.result.unit.enterpriseName);
-    const detailId=`simVertexModal-${normalizeEnterpriseName(reference.result.unit.enterpriseName)}-${normalizeEnterpriseName(type)}`;
+    const type=vertexCommercialTypeLabel(reference.result.unit);
+    const enterpriseName=vertexCommercialDisplayName(reference.result.unit.enterpriseName,type);
+    const detailId=`simVertexModal-${normalizeEnterpriseName(reference.result.unit.enterpriseName)}-${normalizeEnterpriseName(type)||'geral'}`;
     return `<div id="${detailId}" class="sim-vertex-modal" hidden>
       <button class="sim-vertex-modal-backdrop" type="button" data-vertex-modal-close aria-label="Fechar tipologias"></button>
       <section class="sim-vertex-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="${detailId}-title">
-        <div class="sim-vertex-modal-head"><div><span class="eyebrow">tipologias disponíveis</span><h3 id="${detailId}-title">${escapeHtml(enterpriseName)} • ${escapeHtml(type)}</h3><small>Somente andares com unidades disponíveis para venda.</small></div><button class="sim-vertex-modal-close" type="button" data-vertex-modal-close aria-label="Fechar">×</button></div>
+        <div class="sim-vertex-modal-head"><div><span class="eyebrow">tipologias disponíveis</span><h3 id="${detailId}-title">${escapeHtml(enterpriseName)}</h3><small>Somente andares com unidades disponíveis para venda.</small></div><button class="sim-vertex-modal-close" type="button" data-vertex-modal-close aria-label="Fechar">×</button></div>
         <div class="sim-vertex-table-wrap"><table class="sim-vertex-table"><thead><tr><th>Tipologia</th><th>Venda</th><th>Avaliação</th><th>Entrada</th><th>Ações</th></tr></thead><tbody>${vertexResults.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item.result.unit)||commercialRowLabel(item.result.unit))}</b></td><td>${fmtBRL(item.result.sale)}</td><td>${item.result.appraisal?fmtBRL(item.result.appraisal):'—'}</td><td><b class="sim-vertex-entry-value">${fmtBRL(item.result.entry)}</b></td><td><div class="sim-vertex-row-actions"><button class="btn primary btn-small" type="button" data-plan-sim="${item.index}">Simular</button><label class="sim-compare-option"><input type="checkbox" data-compare-sim="${item.index}"><span>Comparar</span></label></div></td></tr>`).join('')}</tbody></table></div>
       </section>
     </div>`;
@@ -692,7 +705,7 @@ function printSimulation(){
       : (r.unit?.developmentType?.toLowerCase().includes('casa')?'Casa':'—');
     return `<tr>
       <td>${String(i+1).padStart(2,'0')}</td>
-      <td><b>${escapeHtml(r.unit?.enterpriseName||'—')}</b></td>
+      <td><b>${escapeHtml(r.unit?enterpriseDisplayName(r.unit.enterpriseName):'—')}</b></td>
       <td>${escapeHtml(typology)}</td>
       <td>${fmtBRL(r.sale)}</td>
       <td>${r.appraisal?fmtBRL(r.appraisal):'—'}</td>
@@ -783,7 +796,8 @@ function renderPaymentPlan(){
   const status=blocked?'OPERAÇÃO BLOQUEADA':r.status;
   const ownMsg=r.ownResourcesMinimum>0?`O cliente deverá pagar no mínimo ${fmtBRL(r.ownResourcesMinimum)} com recursos próprios. O saldo poderá ser estruturado dentro da capacidade do Plano de Pagamento.`:'A entrada gerada está integralmente dentro da capacidade do Plano de Pagamento.';
   const fixed=rule.remunerationType==='fixed';
-  area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(u.enterpriseName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(u.enterpriseName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento + Subsídio</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?`A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de ${Number(r.totalRiskPercent).toLocaleString('pt-BR',{maximumFractionDigits:3})}%.`:escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
+  const displayName=enterpriseDisplayName(u.enterpriseName);
+  area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(displayName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(displayName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento + Subsídio</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?`A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de ${Number(r.totalRiskPercent).toLocaleString('pt-BR',{maximumFractionDigits:3})}%.`:escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
 }
 
 function printPaymentPlan(){
@@ -827,7 +841,7 @@ function printPaymentPlan(){
 
     <div class="print-title">
       <span>Plano de Pagamento</span>
-      <h1>${escapeHtml(u.enterpriseName)}</h1>
+      <h1>${escapeHtml(enterpriseDisplayName(u.enterpriseName))}</h1>
       ${typology==='Não especificada'?'':`<p>${escapeHtml(typology)}</p>`}
     </div>
 

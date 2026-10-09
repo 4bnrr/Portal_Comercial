@@ -46,10 +46,24 @@ assert.equal(
   'Todas as unidades publicadas do Vertex Getúlio devem possuir valor de avaliação.'
 );
 const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='123'&&unit.status==='disponivel');
+const currentMonthName=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',month:'long'}).format(new Date()).toUpperCase();
 assert.ok(availableFragaUnits.length>0,'O catálogo deve publicar unidades disponíveis do Vertex Fraga Maia.');
 assert.ok(
   availableFragaUnits.every(unit=>Number.isInteger(Number(unit.floor))&&unit.typology===(Number(unit.floor)===0?'Térreo':`${Number(unit.floor)}º andar`)),
   'As unidades do Vertex Fraga Maia devem ser classificadas pela numeração do andar.'
+);
+assert.ok(
+  availableFragaUnits.every(unit=>!String(unit.commercialType||'').trim()),
+  'O Vertex Fraga Maia não deve ser dividido entre Padrão e Com varanda.'
+);
+assert.ok(
+  availableFragaUnits.every(unit=>unit.tableName===`VERTEX FRAGA MAIA - ${currentMonthName} - COMPLETA`),
+  'O Vertex Fraga Maia deve usar a tabela completa do mês.'
+);
+assert.ok(
+  availableFragaUnits.every(unit=>Number(unit.price)>0&&Number(unit.appraisal)>0)
+    && availableFragaUnits.some(unit=>Number(unit.price)!==Number(unit.appraisal)),
+  'A tabela completa do Vertex Fraga Maia deve preservar venda e avaliação separadamente.'
 );
 
 console.log('OK — Regra padrão:', {limite:s.maxPlanCapacity, entrada:s.entryRequired, recursoProprio:s.ownResourcesMinimum, imobiliaria:s.realEstateCommission, construtora:s.builderRisk});

@@ -708,7 +708,7 @@ function tableSeriesValue(row, pattern) {
   return item ? numberValue(item.valor) : null;
 }
 
-function collectCommercialDashboardRows(payload, allowAnyTable = false) {
+function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePredicate = null) {
   const index = new Map();
   const walk = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 12) return;
@@ -719,7 +719,8 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false) {
 
     const tableName = textValue(pick(node, ['tabela','nome_tabela','nometabela','nome']));
     const rows = Array.isArray(node.dados) ? node.dados : null;
-    if (rows && (allowAnyTable || normKey(tableName).includes('dashboard'))) {
+    const selectedTable = tablePredicate ? tablePredicate(node) : (allowAnyTable || normKey(tableName).includes('dashboard'));
+    if (rows && selectedTable) {
       for (const row of rows) {
         const detail = {
           price: tableSeriesValue(row, /valordevenda/) ?? extractPrice(row),
@@ -736,6 +737,21 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false) {
   };
   walk(payload);
   return index;
+}
+
+function collectPriceTableNodes(payload, predicate) {
+  const tables = [];
+  const walk = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 12) return;
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child, depth + 1);
+      return;
+    }
+    if (Array.isArray(node.dados) && predicate(node)) tables.push(node);
+    for (const child of Object.values(node)) if (child && typeof child === 'object') walk(child, depth + 1);
+  };
+  walk(payload);
+  return tables;
 }
 
 function lookupCommercialDashboard(index, row) {
@@ -764,7 +780,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
     if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name, hasAvailable: false });
     const situation = lookupUnit(situationIndex, row);
     const situationStatus = Object.keys(situation).length ? deriveStatus(situation) : null;
-    const status = isVertexUnit(row)
+    const status = isFloorGroupedVertexUnit(row)
       ? (intValue(pick(row, ['situacao_para_venda','situacaoparavenda'])) === 1 ? 'disponivel' : 'indisponivel')
       : (situationStatus && situationStatus !== 'indisponivel' ? situationStatus : deriveStatus(row));
     if (status === 'disponivel') enterprises.get(String(id)).hasAvailable = true;
@@ -777,6 +793,8 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
   for (const enterprise of [...enterprises.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))) {
     position++;
     const isVertex = normKey(enterprise.name).includes('vertexgetulio');
+    const isVertexFraga = String(enterprise.id) === '123'
+      || normKey(enterprise.name).includes('residencialvertexfragamaia');
     const endpoint = `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/detalhada`;
     setProgress({
       phase: 'fetching-appraisals',
@@ -809,7 +827,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           isVertex ? { aprovado: 'S' } : {}
         );
         const listedTables = (Array.isArray(tableList) ? tableList : recordArray(tableList))
-          .filter(table => table && pick(table, ['idtabela','id_tabela']));
+          .filter(table => table && priceTableId(table));
         const approvedTables = isVertex ? listedTables.filter(isApprovedPriceTable) : listedTables;
         const activeTables = approvedTables.filter(isActivePanelRow);
         const eligibleTables = activeTables.length ? activeTables : approvedTables;
@@ -825,14 +843,19 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         // Lemos todas as aprovadas e ativas do mês para não
         // descartar os blocos 04 e 05
         // ao selecionar apenas a tabela de maior ID (blocos 01, 02 e 03).
-        selectedTables = isVertex && activeCurrentMonthTables.length
-          ? activeCurrentMonthTables
-          : tables.slice(0, 1);
+        const fragaCompleteTables = isVertexFraga
+          ? tables.filter(isVertexFragaCompletePriceTable)
+          : [];
+        selectedTables = fragaCompleteTables.length
+          ? fragaCompleteTables.slice(0, 1)
+          : (isVertex && activeCurrentMonthTables.length
+              ? activeCurrentMonthTables
+              : tables.slice(0, 1));
         if (selectedTables.length) {
           const selectedPayloads = [];
           const combinedDashboard = new Map();
           for (const table of selectedTables) {
-            const tableId = pick(table, ['idtabela','id_tabela']);
+            const tableId = priceTableId(table);
             const tablePayload = await cvGetConventional(
               `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
               {
@@ -862,6 +885,20 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           payload = [];
           allowAnyTable = true;
           dashboard = new Map();
+        }
+      }
+      // O CVCRM do Fraga Maia incorpora as tabelas no retorno detalhado, mas a
+      // rota de listagem pode responder vazia. Nesse caso usamos diretamente a
+      // tabela COMPLETA do mês, que contém VALOR DE VENDA e VALOR DO IMÓVEL.
+      if (isVertexFraga) {
+        const embeddedCompleteTables = collectPriceTableNodes(genericPayload, isVertexFragaCompletePriceTable)
+          .sort((a, b) => priceTableId(b) - priceTableId(a));
+        if (embeddedCompleteTables.length) {
+          selectedTables = embeddedCompleteTables.slice(0, 1);
+          payload = selectedTables;
+          appraisalPayload = selectedTables;
+          allowAnyTable = true;
+          dashboard = collectCommercialDashboardRows(selectedTables, true, isVertexFragaCompletePriceTable);
         }
       }
       const parsed = collectDetailedUnitAppraisals(appraisalPayload);
@@ -1063,6 +1100,14 @@ function priceTableMonthKey(row) {
 function isCurrentMonthPriceTable(row, now = Date.now()) {
   return priceTableMonthKey(row) === monthKey(now);
 }
+function isVertexFragaCompletePriceTable(row) {
+  const name = normKey(pick(row, ['nome','tabela','nome_tabela','nometabela']));
+  const monthNames = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const currentMonthName = monthNames[Number(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo', month: 'numeric'
+  }).format(new Date())) - 1];
+  return name.includes('vertexfragamaia') && name.includes('completa') && name.includes(currentMonthName);
+}
 function priceTableId(row) {
   return intValue(pick(row, ['idtabela','id_tabela','idtabela_int'])) || 0;
 }
@@ -1109,6 +1154,11 @@ function bestPriceByUnit(rows) {
 function isVertexUnit(row) {
   return enterpriseKey(row) === '121' || normKey(enterpriseName(row)).includes('vertexgetulio');
 }
+function isVertexFragaMaiaUnit(row) {
+  const id = enterpriseKey(row);
+  const name = normKey(enterpriseName(row));
+  return id === '123' || name.includes('residencialvertexfragamaia') || name === 'vertexfragamaia';
+}
 function isFloorGroupedVertexUnit(row) {
   const id = enterpriseKey(row);
   const name = normKey(enterpriseName(row));
@@ -1149,21 +1199,20 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
   // No Vertex, /unidades é a fonte atual de disponibilidade. A rota
   // /unidades/situacao mantém registros históricos e estava ocultando unidades
   // Padrão e Com varanda que voltaram a ficar disponíveis.
-  const vertexRow = isVertexUnit(baseRow);
   const floorGroupedVertexRow = isFloorGroupedVertexUnit(baseRow);
-  const vertexAvailable = vertexRow
+  const vertexAvailable = floorGroupedVertexRow
     && intValue(pick(baseRow, ['situacao_para_venda','situacaoparavenda'])) === 1;
-  const resolvedStatus = vertexRow
+  const resolvedStatus = floorGroupedVertexRow
     ? (vertexAvailable ? 'disponivel' : 'indisponivel')
     : (hasSituationRow && situationStatus !== 'indisponivel' ? situationStatus : baseStatus);
-  const statusSource = vertexRow
+  const statusSource = floorGroupedVertexRow
     ? baseRow
     : (hasSituationRow && situationStatus !== 'indisponivel' ? situationRow : baseRow);
   const eId = enterpriseKey(identitySource) || enterpriseName(identitySource);
   const id = unitKey(identitySource) || crypto.createHash('sha1').update(JSON.stringify(baseRow)).digest('hex').slice(0,14);
   // Quando há tabelas mensais específicas do Vertex, unidades ausentes nelas
   // não podem herdar preços da Dashboard genérica antiga.
-  const currentVertexTableMatch = !vertexRow || !preserveBaseIdentity || Boolean(dashboardRow);
+  const currentVertexTableMatch = !floorGroupedVertexRow || !preserveBaseIdentity || Boolean(dashboardRow);
   const price = currentVertexTableMatch
     ? (dashboardRow?.price ?? extractPrice(priceRow) ?? extractPrice(baseRow))
     : null;
@@ -1177,7 +1226,8 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     code: textValue(pick(identitySource, ['idunidade_int','codigo','codigo_unidade','unidade','nome']), id),
     developmentType: textValue(pick(identitySource, ['tipo_empreendimento'])),
     typology: floorGroupedVertexRow ? vertexFloorLabel(baseRow) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
-    commercialType: floorGroupedVertexRow ? vertexCommercialType(baseRow) : '',
+    // O Fraga Maia não possui diferenciação comercial entre Padrão e Com varanda.
+    commercialType: floorGroupedVertexRow && !isVertexFragaMaiaUnit(baseRow) ? vertexCommercialType(baseRow) : '',
     stage: textValue(pick(identitySource, ['etapa'])),
     bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
     suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),
