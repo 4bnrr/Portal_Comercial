@@ -168,7 +168,7 @@ function varandaCategory(u){
     .toUpperCase();
 
   // VERTEX: cada pavimento é uma tipologia comercial independente.
-  if(enterprise.includes('VERTEX GETULIO')){
+  if(enterprise.includes('VERTEX GETULIO')||enterprise.includes('RESIDENCIAL VERTEX FRAGA MAIA')){
     const configured=String(u.typology||'').trim();
     if(configured.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()==='terreo') return 'Térreo';
     const configuredFloor=configured.match(/^(\d+)º andar$/i);
@@ -273,7 +273,14 @@ function enterpriseVarandaMinimumRows(){
   });
 }
 function commercialRowLabel(r){return String(r._displayLabel||r.enterpriseName||'')}
-function isVertexCommercialRow(r){return normalizeEnterpriseName(r?.enterpriseName).includes('vertexgetulio')}
+function isVertexCommercialRow(r){
+  const enterprise=normalizeEnterpriseName(r?.enterpriseName);
+  return enterprise.includes('vertexgetulio')||enterprise.includes('residencialvertexfragamaia');
+}
+function vertexCommercialGroupKey(r){
+  const type=String(r?.commercialType||'Padrão').trim()||'Padrão';
+  return `${normalizeEnterpriseName(r?.enterpriseName)}|${normalizeEnterpriseName(type)}`;
+}
 function tables(){return pageHead('Consulta comercial','Tabelas de preços','Menor valor disponível por empreendimento e tipologia comercial, com o respectivo valor de avaliação da unidade utilizada como referência.')+`<section class="section prices-section"><div class="container"><div class="price-search-panel"><div class="price-search-copy"><div class="eyebrow">Consulta rápida</div><strong>Encontre um empreendimento</strong><small>Pesquise pelo nome do empreendimento ou pela tipologia exibida.</small></div><div class="filters price-filters"><input id="q" class="input price-search-input" placeholder="Buscar empreendimento"></div></div><div id="tableArea"></div></div></section>`}
 function renderTable(){
   const q=(document.querySelector('#q')?.value||'').toLowerCase();
@@ -284,12 +291,13 @@ function renderTable(){
     const vertexGroups=new Map();
     for(const row of vertexRows){
       const type=String(row.commercialType||'Padrão').trim();
-      if(!vertexGroups.has(type)) vertexGroups.set(type,[]);
-      vertexGroups.get(type).push(row);
+      const key=vertexCommercialGroupKey(row);
+      if(!vertexGroups.has(key)) vertexGroups.set(key,{type,enterpriseName:row.enterpriseName,rows:[]});
+      vertexGroups.get(key).rows.push(row);
     }
-    for(const [type,rows] of vertexGroups){
+    for(const {type,enterpriseName,rows} of vertexGroups.values()){
       const reference=rows.slice().sort((a,b)=>Number(a.price)-Number(b.price))[0];
-      entries.push({kind:'vertex',row:reference,rows,commercialType:type,enterpriseName:`Vertex Getulio • ${type}`});
+      entries.push({kind:'vertex',row:reference,rows,commercialType:type,enterpriseName:`${enterpriseDisplayName(enterpriseName)} • ${type}`});
     }
   }
   const visibleEntries=entries
@@ -304,7 +312,7 @@ function renderTable(){
     const r=entry.row;
     const detailId=`vertexTypologyDetails-${entryIndex}`;
     return `<tr class="vertex-summary-row"><td><b>${escapeHtml(entry.enterpriseName)}</b></td><td><b>${fmtBRL(r.price)}</b></td><td><b>${Number(r.appraisal)>0?fmtBRL(r.appraisal):'—'}</b></td><td><button class="btn secondary btn-small vertex-typology-toggle" type="button" data-target="${detailId}" aria-expanded="false">Simular ↓</button></td></tr>
-      <tr id="${detailId}" class="vertex-detail-row" hidden><td colspan="4"><div class="vertex-detail-panel"><div class="vertex-detail-heading"><b>Tipologias do Vertex • ${escapeHtml(entry.commercialType)}</b><small>Escolha um andar para simular</small></div><div class="vertex-detail-table-wrap"><table class="vertex-detail-table"><thead><tr><th>Tipologia</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${entry.rows.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item))}</b></td><td><b>${fmtBRL(item.price)}</b></td><td><b>${Number(item.appraisal)>0?fmtBRL(item.appraisal):'—'}</b></td><td><a class="btn secondary btn-small" href="#simulador">Simular →</a></td></tr>`).join('')}</tbody></table></div></div></td></tr>`;
+      <tr id="${detailId}" class="vertex-detail-row" hidden><td colspan="4"><div class="vertex-detail-panel"><div class="vertex-detail-heading"><b>${escapeHtml(entry.enterpriseName)}</b><small>Escolha um andar para simular</small></div><div class="vertex-detail-table-wrap"><table class="vertex-detail-table"><thead><tr><th>Tipologia</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${entry.rows.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item))}</b></td><td><b>${fmtBRL(item.price)}</b></td><td><b>${Number(item.appraisal)>0?fmtBRL(item.appraisal):'—'}</b></td><td><a class="btn secondary btn-small" href="#simulador">Simular →</a></td></tr>`).join('')}</tbody></table></div></div></td></tr>`;
   }).join('');
   area.innerHTML=`<div class="price-table-head"><p class="meta"><b>${visibleEntries.length.toLocaleString('pt-BR')}</b> opções comerciais resumidas</p><span class="price-table-caption">Menores valores disponíveis</span></div>${visibleEntries.length?`<div class="table-wrap table-wrap-refined"><table class="data-table price-table"><thead><tr><th>Empreendimento</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${body}</tbody></table></div>`:'<div class="empty">Nenhuma opção disponível encontrada.</div>'}`;
   document.querySelectorAll('.vertex-typology-toggle').forEach(button=>button.addEventListener('click',e=>{
@@ -488,19 +496,20 @@ function renderSimulationResults(results){
   const indexedResults=results.map((result,index)=>({result,index}));
   const vertexGroups=new Map();
   for(const item of indexedResults.filter(({result})=>isVertexCommercialRow(result.unit))){
-    const type=String(item.result.unit.commercialType||'Padrão').trim()||'Padrão';
-    if(!vertexGroups.has(type))vertexGroups.set(type,[]);
-    vertexGroups.get(type).push(item);
+    const key=vertexCommercialGroupKey(item.result.unit);
+    if(!vertexGroups.has(key))vertexGroups.set(key,[]);
+    vertexGroups.get(key).push(item);
   }
   const renderedVertexGroups=new Set();
   const cards=indexedResults.map(({result,index})=>{
     if(!isVertexCommercialRow(result.unit))return simulationResultCard(result,index);
     const type=String(result.unit.commercialType||'Padrão').trim()||'Padrão';
-    if(renderedVertexGroups.has(type))return '';
-    renderedVertexGroups.add(type);
-    const vertexResults=vertexGroups.get(type)||[];
+    const groupKey=vertexCommercialGroupKey(result.unit);
+    if(renderedVertexGroups.has(groupKey))return '';
+    renderedVertexGroups.add(groupKey);
+    const vertexResults=vertexGroups.get(groupKey)||[];
     const reference=vertexResults[0];
-    const detailId=`simVertexModal-${normalizeEnterpriseName(type)}`;
+    const detailId=`simVertexModal-${normalizeEnterpriseName(result.unit.enterpriseName)}-${normalizeEnterpriseName(type)}`;
     return `<article class="sim-result-card sim-vertex-summary-card">
       <div class="sim-result-top">
         <div><span class="sim-result-index">VERTEX</span><h3>${escapeHtml(enterpriseDisplayName(reference.result.unit.enterpriseName))} • ${escapeHtml(type)}</h3></div>
@@ -516,12 +525,15 @@ function renderSimulationResults(results){
       <div class="sim-card-actions"><button class="btn primary btn-small" type="button" data-vertex-sim-toggle data-target="${detailId}" aria-expanded="false">Ver tipologias</button></div>
     </article>`;
   }).join('');
-  const vertexModals=[...vertexGroups.entries()].map(([type,vertexResults])=>{
-    const detailId=`simVertexModal-${normalizeEnterpriseName(type)}`;
+  const vertexModals=[...vertexGroups.values()].map(vertexResults=>{
+    const reference=vertexResults[0];
+    const type=String(reference.result.unit.commercialType||'Padrão').trim()||'Padrão';
+    const enterpriseName=enterpriseDisplayName(reference.result.unit.enterpriseName);
+    const detailId=`simVertexModal-${normalizeEnterpriseName(reference.result.unit.enterpriseName)}-${normalizeEnterpriseName(type)}`;
     return `<div id="${detailId}" class="sim-vertex-modal" hidden>
       <button class="sim-vertex-modal-backdrop" type="button" data-vertex-modal-close aria-label="Fechar tipologias"></button>
       <section class="sim-vertex-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="${detailId}-title">
-        <div class="sim-vertex-modal-head"><div><span class="eyebrow">tipologias disponíveis</span><h3 id="${detailId}-title">Vertex Getúlio • ${escapeHtml(type)}</h3><small>Somente andares com unidades disponíveis para venda.</small></div><button class="sim-vertex-modal-close" type="button" data-vertex-modal-close aria-label="Fechar">×</button></div>
+        <div class="sim-vertex-modal-head"><div><span class="eyebrow">tipologias disponíveis</span><h3 id="${detailId}-title">${escapeHtml(enterpriseName)} • ${escapeHtml(type)}</h3><small>Somente andares com unidades disponíveis para venda.</small></div><button class="sim-vertex-modal-close" type="button" data-vertex-modal-close aria-label="Fechar">×</button></div>
         <div class="sim-vertex-table-wrap"><table class="sim-vertex-table"><thead><tr><th>Tipologia</th><th>Venda</th><th>Avaliação</th><th>Entrada</th><th>Ações</th></tr></thead><tbody>${vertexResults.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item.result.unit)||commercialRowLabel(item.result.unit))}</b></td><td>${fmtBRL(item.result.sale)}</td><td>${item.result.appraisal?fmtBRL(item.result.appraisal):'—'}</td><td><b class="sim-vertex-entry-value">${fmtBRL(item.result.entry)}</b></td><td><div class="sim-vertex-row-actions"><button class="btn primary btn-small" type="button" data-plan-sim="${item.index}">Simular</button><label class="sim-compare-option"><input type="checkbox" data-compare-sim="${item.index}"><span>Comparar</span></label></div></td></tr>`).join('')}</tbody></table></div>
       </section>
     </div>`;

@@ -36,6 +36,8 @@ assert.equal(vertex.maxPlanCapacity,14000);
 assert.equal(vertex.realEstateCommission,7000);
 assert.equal(vertex.builderRisk,7000);
 assert.equal(vertex.ownResourcesMinimum,18000);
+const fragaRule=selectPaymentRule(configuredRules,{enterpriseName:'Residencial Vertex Fraga Maia',typology:'Com varanda 1º andar',developmentType:'Vertical - Apartamento'});
+assert.equal(fragaRule.id,'padrao','O Vertex Fraga Maia mantém a regra financeira padrão.');
 const availableVertexUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='121'&&unit.status==='disponivel');
 assert.ok(availableVertexUnits.length>0,'O catálogo deve publicar unidades disponíveis do Vertex Getúlio.');
 assert.equal(
@@ -43,9 +45,16 @@ assert.equal(
   availableVertexUnits.length,
   'Todas as unidades publicadas do Vertex Getúlio devem possuir valor de avaliação.'
 );
+const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='123'&&unit.status==='disponivel');
+assert.ok(availableFragaUnits.length>0,'O catálogo deve publicar unidades disponíveis do Vertex Fraga Maia.');
+assert.ok(
+  availableFragaUnits.every(unit=>Number.isInteger(Number(unit.floor))&&unit.typology===(Number(unit.floor)===0?'Térreo':`${Number(unit.floor)}º andar`)),
+  'As unidades do Vertex Fraga Maia devem ser classificadas pela numeração do andar.'
+);
 
 console.log('OK — Regra padrão:', {limite:s.maxPlanCapacity, entrada:s.entryRequired, recursoProprio:s.ownResourcesMinimum, imobiliaria:s.realEstateCommission, construtora:s.builderRisk});
 console.log('OK — Atlanta:', {comissao:a.realEstateCommission, coordenacao:a.coordination, construtora:a.builderRisk, total:a.realEstateCommission+a.coordination+a.builderRisk});
 console.log('OK — Acqua América:', {comissao:q.realEstateCommission, coordenacao:q.coordination, construtora:q.builderRisk, total:q.realEstateCommission+q.coordination+q.builderRisk});
 console.log('OK — Vertex Getúlio:', {limite:vertex.maxPlanCapacity, imobiliaria:vertex.realEstateCommission, construtora:vertex.builderRisk, recursoProprio:vertex.ownResourcesMinimum});
 console.log('OK — Avaliações do Vertex:', {unidades:availableVertexUnits.length, comAvaliacao:availableVertexUnits.filter(unit=>Number(unit.appraisal)>0).length});
+console.log('OK — Andares do Vertex Fraga Maia:', {unidades:availableFragaUnits.length, andares:[...new Set(availableFragaUnits.map(unit=>unit.floor))].sort((a,b)=>a-b)});

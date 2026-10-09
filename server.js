@@ -1109,6 +1109,11 @@ function bestPriceByUnit(rows) {
 function isVertexUnit(row) {
   return enterpriseKey(row) === '121' || normKey(enterpriseName(row)).includes('vertexgetulio');
 }
+function isFloorGroupedVertexUnit(row) {
+  const id = enterpriseKey(row);
+  const name = normKey(enterpriseName(row));
+  return id === '121' || id === '123' || name.includes('vertexgetulio') || name.includes('residencialvertexfragamaia');
+}
 function vertexFloorNumber(row) {
   let floor = intValue(pick(row, ['andar','pavimento']));
   if (floor === null) {
@@ -1145,6 +1150,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
   // /unidades/situacao mantém registros históricos e estava ocultando unidades
   // Padrão e Com varanda que voltaram a ficar disponíveis.
   const vertexRow = isVertexUnit(baseRow);
+  const floorGroupedVertexRow = isFloorGroupedVertexUnit(baseRow);
   const vertexAvailable = vertexRow
     && intValue(pick(baseRow, ['situacao_para_venda','situacaoparavenda'])) === 1;
   const resolvedStatus = vertexRow
@@ -1170,13 +1176,13 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     enterpriseName: enterpriseName(identitySource),
     code: textValue(pick(identitySource, ['idunidade_int','codigo','codigo_unidade','unidade','nome']), id),
     developmentType: textValue(pick(identitySource, ['tipo_empreendimento'])),
-    typology: isVertexUnit(baseRow) ? vertexFloorLabel(baseRow) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
-    commercialType: isVertexUnit(baseRow) ? vertexCommercialType(baseRow) : '',
+    typology: floorGroupedVertexRow ? vertexFloorLabel(baseRow) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
+    commercialType: floorGroupedVertexRow ? vertexCommercialType(baseRow) : '',
     stage: textValue(pick(identitySource, ['etapa'])),
     bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
     suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),
     tower: textValue(pick(identitySource, ['bloco','torre','nome_bloco','nomebloco','bloco_nome'])),
-    floor: vertexRow ? vertexFloorNumber(baseRow) : intValue(pick(identitySource, ['andar','pavimento'])),
+    floor: floorGroupedVertexRow ? vertexFloorNumber(baseRow) : intValue(pick(identitySource, ['andar','pavimento'])),
     area: numberValue(pick(identitySource, ['area_privativa','areaprivativa','area_privativa_total','area_total','areatotal','area'])),
     parkingSpaces: intValue(pick(identitySource, ['vagas_garagem','qtde_vagas_garagem','vagas','vagasgaragem','quantidade_vagas'])),
     price,
