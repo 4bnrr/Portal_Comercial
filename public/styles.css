@@ -1995,7 +1995,7 @@ main{
 .sim-vertex-summary-card{height:100%}
 .sim-vertex-summary-card .sim-card-actions{justify-content:flex-start}
 .sim-vertex-summary-card .sim-card-actions .btn{width:100%}
-.sim-vertex-summary-note{min-height:48px;display:flex;align-items:center}
+.sim-vertex-summary-note{display:flex;align-items:center}
 body.sim-modal-open{overflow:hidden}
 .sim-vertex-modal{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:24px}
 .sim-vertex-modal[hidden]{display:none!important}
