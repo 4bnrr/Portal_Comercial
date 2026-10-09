@@ -453,12 +453,65 @@ function buildSimulationResults(){
     return true;
   });
 }
+function simulationResultCard(r,i){
+  return `<article class="sim-result-card">
+    <div class="sim-result-top">
+      <div><span class="sim-result-index">${String(i+1).padStart(2,'0')}</span><h3>${escapeHtml(commercialRowLabel(r.unit))}</h3></div>
+      <div class="sim-result-entry sim-result-entry-highlight"><small>Entrada</small><strong>${fmtBRL(r.entry)}</strong></div>
+    </div>
+    <div class="sim-result-grid">
+      <div><small>Valor de venda</small><b>${fmtBRL(r.sale)}</b></div>
+      <div><small>Valor da avaliação</small><b>${r.appraisal?fmtBRL(r.appraisal):'Não informado'}</b></div>
+      <div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div>
+      <div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div>
+    </div>
+    ${r.capped
+      ? `<div class="sim-warning">O financiamento efetivo foi limitado a 80% do valor de avaliação.</div>`
+      : r.appraisal
+        ? `<div class="sim-ok">Financiamento dentro do limite de 80% da avaliação.</div>`
+        : `<div class="sim-warning">Valor de avaliação não identificado; não foi possível validar o limite de 80%.</div>`}
+    <div class="sim-card-actions">
+      <button class="btn primary btn-small" type="button" data-plan-sim="${i}">Plano de Pagamento</button>
+      <label class="sim-compare-option">
+        <input type="checkbox" data-compare-sim="${i}">
+        <span>Comparar</span>
+      </label>
+    </div>
+  </article>`;
+}
 function renderSimulationResults(results){
   const area=document.querySelector('#simResult');if(!area)return;
   if(!results.length){
     area.innerHTML='<div class="empty"><b>Nenhuma opção comercial disponível para simulação.</b><p>Verifique se o catálogo foi sincronizado e se existem unidades com status Disponível e preço válido.</p></div>';
     return;
   }
+  const indexedResults=results.map((result,index)=>({result,index}));
+  const vertexGroups=new Map();
+  for(const item of indexedResults.filter(({result})=>isVertexCommercialRow(result.unit))){
+    const type=String(item.result.unit.commercialType||'Padrão').trim()||'Padrão';
+    if(!vertexGroups.has(type))vertexGroups.set(type,[]);
+    vertexGroups.get(type).push(item);
+  }
+  const renderedVertexGroups=new Set();
+  const cards=indexedResults.map(({result,index})=>{
+    if(!isVertexCommercialRow(result.unit))return simulationResultCard(result,index);
+    const type=String(result.unit.commercialType||'Padrão').trim()||'Padrão';
+    if(renderedVertexGroups.has(type))return '';
+    renderedVertexGroups.add(type);
+    const vertexResults=vertexGroups.get(type)||[];
+    const reference=vertexResults[0];
+    const detailId=`simVertexOptions-${normalizeEnterpriseName(type)}`;
+    return `<section class="sim-vertex-group">
+      <button class="sim-vertex-group-toggle" type="button" data-vertex-sim-toggle data-target="${detailId}" aria-expanded="false">
+        <div><span class="eyebrow">empreendimento</span><h3>${escapeHtml(enterpriseDisplayName(reference.result.unit.enterpriseName))} • ${escapeHtml(type)}</h3><small>${vertexResults.length.toLocaleString('pt-BR')} tipologias de andar disponíveis</small></div>
+        <div class="sim-vertex-group-entry"><small>Menor entrada</small><strong>${fmtBRL(reference.result.entry)}</strong><span data-vertex-toggle-label>Ver tipologias ↓</span></div>
+      </button>
+      <div id="${detailId}" class="sim-vertex-options" hidden>
+        <div class="sim-vertex-options-head"><b>Tipologias do Vertex Getúlio • ${escapeHtml(type)}</b><small>Escolha um andar para acessar o Plano de Pagamento ou comparar.</small></div>
+        <div class="sim-vertex-grid">${vertexResults.map(item=>simulationResultCard(item.result,item.index)).join('')}</div>
+      </div>
+    </section>`;
+  }).join('');
   area.innerHTML=`
     <div class="sim-results-head">
       <div>
@@ -471,31 +524,17 @@ function renderSimulationResults(results){
       </div>
     </div>
     <div id="simComparison"></div><div class="sim-result-list">
-      ${results.map((r,i)=>`<article class="sim-result-card">
-        <div class="sim-result-top">
-          <div><span class="sim-result-index">${String(i+1).padStart(2,'0')}</span><h3>${escapeHtml(commercialRowLabel(r.unit))}</h3></div>
-          <div class="sim-result-entry sim-result-entry-highlight"><small>Entrada</small><strong>${fmtBRL(r.entry)}</strong></div>
-        </div>
-        <div class="sim-result-grid">
-          <div><small>Valor de venda</small><b>${fmtBRL(r.sale)}</b></div>
-          <div><small>Valor da avaliação</small><b>${r.appraisal?fmtBRL(r.appraisal):'Não informado'}</b></div>
-          <div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div>
-          <div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div>
-        </div>
-        ${r.capped
-          ? `<div class="sim-warning">O financiamento efetivo foi limitado a 80% do valor de avaliação.</div>`
-          : r.appraisal
-            ? `<div class="sim-ok">Financiamento dentro do limite de 80% da avaliação.</div>`
-            : `<div class="sim-warning">Valor de avaliação não identificado; não foi possível validar o limite de 80%.</div>`}
-        <div class="sim-card-actions">
-          <button class="btn primary btn-small" type="button" data-plan-sim="${i}">Plano de Pagamento</button>
-          <label class="sim-compare-option">
-            <input type="checkbox" data-compare-sim="${i}">
-            <span>Comparar</span>
-          </label>
-        </div>
-      </article>`).join('')}
+      ${cards}
     </div>`;
+  area.querySelectorAll('[data-vertex-sim-toggle]').forEach(button=>button.addEventListener('click',e=>{
+    const details=area.querySelector(`#${e.currentTarget.dataset.target}`);
+    if(!details)return;
+    const opening=details.hidden;
+    details.hidden=!opening;
+    e.currentTarget.setAttribute('aria-expanded',String(opening));
+    const label=e.currentTarget.querySelector('[data-vertex-toggle-label]');
+    if(label)label.textContent=opening?'Ocultar tipologias ↑':'Ver tipologias ↓';
+  }));
   area.querySelectorAll('[data-compare-sim]').forEach(cb=>{
     cb.addEventListener('change',()=>{
       const selected=[...area.querySelectorAll('[data-compare-sim]:checked')];

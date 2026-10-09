@@ -1992,7 +1992,25 @@ main{
   width:16px;
   height:16px;
 }
+.sim-vertex-group{grid-column:1/-1;border:1px solid #e5e7eb;border-radius:20px;background:#fff;box-shadow:0 8px 28px rgba(17,24,39,.055);overflow:hidden}
+.sim-vertex-group-toggle{display:flex;align-items:center;justify-content:space-between;gap:24px;width:100%;padding:24px 26px;border:0;border-left:4px solid var(--red);background:#fff;color:var(--ink);text-align:left;cursor:pointer}
+.sim-vertex-group-toggle:hover{background:#fcfcfd}
+.sim-vertex-group-toggle h3{margin:5px 0 4px;font-size:22px;letter-spacing:-.025em}
+.sim-vertex-group-toggle small{color:var(--muted);font-size:11px}
+.sim-vertex-group-entry{display:flex;flex-direction:column;align-items:flex-end;flex:0 0 auto}
+.sim-vertex-group-entry strong{margin:4px 0 8px;color:var(--red);font-size:26px;letter-spacing:-.035em}
+.sim-vertex-group-entry span{color:var(--red);font-size:11px;font-weight:800}
+.sim-vertex-options{padding:0 24px 24px;border-top:1px solid #eef0f2;background:#fafbfc}
+.sim-vertex-options-head{display:flex;justify-content:space-between;gap:18px;padding:18px 2px;color:#25292f}
+.sim-vertex-options-head small{color:var(--muted)}
+.sim-vertex-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 @media(max-width:700px){
+  .sim-vertex-group-toggle{align-items:flex-start;padding:20px 18px;gap:14px}
+  .sim-vertex-group-toggle h3{font-size:19px}
+  .sim-vertex-group-entry strong{font-size:20px}
+  .sim-vertex-options{padding:0 12px 14px}
+  .sim-vertex-options-head{flex-direction:column;gap:5px;padding:15px 2px}
+  .sim-vertex-grid{grid-template-columns:1fr}
   .sim-results-below .sim-result-top{
     align-items:flex-start;
     padding:20px 20px 16px 24px;
