@@ -2,7 +2,9 @@ name: Sincronizar CVCRM na Vercel
 
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    # Evita o congestionamento do GitHub Actions no início da hora.
+    # Continua executando a consulta em intervalos de 4 horas.
+    - cron: "17 */4 * * *"
   workflow_dispatch:
 
 permissions:
