@@ -1,5 +1,6 @@
 node_modules/
 .env
+supabase/.temp/
 logs/*.log
 data/cache.json
 data/raw-cvcrm-last.json

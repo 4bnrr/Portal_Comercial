@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "build:static-data": "node scripts/build-static-data.mjs",
-    "test": "node tests-payment-plan.mjs"
+    "test": "node tests-payment-plan.mjs && node tests-watchdog.mjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

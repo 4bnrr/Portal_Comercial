@@ -1,0 +1,4 @@
+project_id = "portal-comercial"
+
+[functions.cvcrm-watchdog]
+verify_jwt = false
