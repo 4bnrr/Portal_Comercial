@@ -46,24 +46,16 @@ assert.equal(
   'Todas as unidades publicadas do Vertex Getúlio devem possuir valor de avaliação.'
 );
 const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='123'&&unit.status==='disponivel');
-const currentMonthName=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',month:'long'}).format(new Date()).toUpperCase();
-assert.ok(availableFragaUnits.length>0,'O catálogo deve publicar unidades disponíveis do Vertex Fraga Maia.');
-assert.ok(
-  availableFragaUnits.every(unit=>Number.isInteger(Number(unit.floor))&&unit.typology===(Number(unit.floor)===0?'Térreo':`${Number(unit.floor)}º andar`)),
-  'As unidades do Vertex Fraga Maia devem ser classificadas pela numeração do andar.'
+assert.equal(availableFragaUnits.length,0,'O Vertex Fraga Maia deve permanecer oculto no catálogo publicado.');
+assert.equal(
+  publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
+  false,
+  'O cartão do Vertex Fraga Maia não deve aparecer no portal.'
 );
-assert.ok(
-  availableFragaUnits.every(unit=>!String(unit.commercialType||'').trim()),
-  'O Vertex Fraga Maia não deve ser dividido entre Padrão e Com varanda.'
-);
-assert.ok(
-  availableFragaUnits.every(unit=>unit.tableName===`VERTEX FRAGA MAIA - ${currentMonthName} - COMPLETA`),
-  'O Vertex Fraga Maia deve usar a tabela completa do mês.'
-);
-assert.ok(
-  availableFragaUnits.every(unit=>Number(unit.price)>0&&Number(unit.appraisal)>0)
-    && availableFragaUnits.some(unit=>Number(unit.price)!==Number(unit.appraisal)),
-  'A tabela completa do Vertex Fraga Maia deve preservar venda e avaliação separadamente.'
+assert.equal(
+  publishedCatalog.enterpriseMedia.residencialvertexfragamaia?.visible,
+  false,
+  'A configuração temporária de visibilidade do Vertex Fraga Maia deve permanecer desativada.'
 );
 
 console.log('OK — Regra padrão:', {limite:s.maxPlanCapacity, entrada:s.entryRequired, recursoProprio:s.ownResourcesMinimum, imobiliaria:s.realEstateCommission, construtora:s.builderRisk});
@@ -71,4 +63,4 @@ console.log('OK — Atlanta:', {comissao:a.realEstateCommission, coordenacao:a.c
 console.log('OK — Acqua América:', {comissao:q.realEstateCommission, coordenacao:q.coordination, construtora:q.builderRisk, total:q.realEstateCommission+q.coordination+q.builderRisk});
 console.log('OK — Vertex Getúlio:', {limite:vertex.maxPlanCapacity, imobiliaria:vertex.realEstateCommission, construtora:vertex.builderRisk, recursoProprio:vertex.ownResourcesMinimum});
 console.log('OK — Avaliações do Vertex:', {unidades:availableVertexUnits.length, comAvaliacao:availableVertexUnits.filter(unit=>Number(unit.appraisal)>0).length});
-console.log('OK — Andares do Vertex Fraga Maia:', {unidades:availableFragaUnits.length, andares:[...new Set(availableFragaUnits.map(unit=>unit.floor))].sort((a,b)=>a-b)});
+console.log('OK — Vertex Fraga Maia oculto no portal.');
