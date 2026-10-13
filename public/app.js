@@ -16,6 +16,7 @@ let adminEnterpriseData = { entries: [], pending: [] };
 let backups = [];
 let readOnlyPortal = false;
 let staticPortal = false;
+const CVCRM_WORKFLOW_RUNS_URL='https://api.github.com/repos/4bnrr/Portal_Comercial/actions/workflows/vercel-hourly-sync.yml/runs?status=success&per_page=1';
 
 
 const fmtBRL = value => value == null || Number.isNaN(Number(value)) ? '—' : Number(value).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -23,6 +24,22 @@ const fmtDate = value => value ? new Date(value).toLocaleString('pt-BR') : '—'
 const escapeHtml = s => String(s ?? '').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toast = (msg,error=false) => { toastEl.textContent=msg;toastEl.className='toast show'+(error?' error':'');setTimeout(()=>toastEl.className='toast',3500); };
 async function api(url, options={}) { const r=await fetch(url,options); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||j.message||`Erro ${r.status}`); return j; }
+function lastCvcrmConsultation(){return catalog.lastConsultation||catalog.lastSuccess||catalog.lastSync||null}
+async function refreshCvcrmConsultationStatus(){
+  try{
+    const data=await api(CVCRM_WORKFLOW_RUNS_URL,{
+      headers:{Accept:'application/vnd.github+json'},
+      signal:AbortSignal.timeout(5000)
+    });
+    const run=Array.isArray(data.workflow_runs)?data.workflow_runs[0]:null;
+    const consultedAt=run?.updated_at||run?.run_started_at||run?.created_at||null;
+    const currentAt=lastCvcrmConsultation();
+    if(consultedAt&&!Number.isNaN(Date.parse(consultedAt))&&(!currentAt||Date.parse(consultedAt)>Date.parse(currentAt))){
+      catalog={...catalog,lastConsultation:consultedAt};
+      updateHeader();
+    }
+  }catch{}
+}
 async function loadAll(){
   if(location.hostname.endsWith('.vercel.app')){
     const bootstrap=await api('/data/bootstrap.json',{cache:'no-store'});
@@ -35,6 +52,7 @@ async function loadAll(){
     staticPortal=true;
     document.querySelector('nav a[data-route="administracao"]')?.remove();
     updateHeader();
+    void refreshCvcrmConsultationStatus();
     return;
   }
   [catalog,enterpriseLinks,paymentPlanRules,enterpriseMediaConfig,priceHistory]=await Promise.all([
@@ -54,9 +72,10 @@ function updateHeader(){
   const el=document.querySelector('#headerStatus');if(!el)return;
   const ok=catalog.status==='ok'||catalog.status==='warning';
   const sync=catalog.syncing;
-  const age=catalog.lastSuccess?timeAgo(catalog.lastSuccess):'sem sincronização';
+  const lastConsultation=lastCvcrmConsultation();
+  const age=lastConsultation?timeAgo(lastConsultation):'sem sincronização';
   el.className='sync-pill '+(ok?'ok':catalog.status==='error'?'error':'');
-  el.title=`Última atualização: ${fmtDate(catalog.lastSuccess)}`;
+  el.title=`Última consulta ao CVCRM: ${fmtDate(lastConsultation)}`;
   el.innerHTML=`<span></span>${sync?'Sincronizando':ok?`CVCRM • ${age}`:catalog.status==='error'?'Falha CVCRM':'CVCRM pendente'}`;
 }
 function timeAgo(value){
