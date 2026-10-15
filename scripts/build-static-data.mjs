@@ -102,7 +102,6 @@ const hiddenNames = new Set(['aracastreetmall', 'testepagadoria', 'atlantareside
 function isHiddenEnterpriseName(value) {
   const key = normKey(value);
   return hiddenNames.has(key)
-    || key.includes('azure')
     || key.includes('vertexfragamaia');
 }
 const enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
