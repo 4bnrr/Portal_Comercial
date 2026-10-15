@@ -133,6 +133,14 @@
     ],
     "updatedAt": "2026-09-21T16:38:38.972Z"
   },
+  "azurefragamaia": {
+    "sourceName": "Azure Fraga Maia",
+    "displayName": "Azure Fraga Maia",
+    "image": "/assets/empreendimentos/azure-fraga-maia.png",
+    "url": "",
+    "visible": true,
+    "highlights": []
+  },
   "residencialvertexfragamaia": {
     "sourceName": "Residencial Vertex Fraga Maia",
     "displayName": "Vertex Fraga Maia",
