@@ -111,16 +111,19 @@ let enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
     && enterpriseMedia[key]?.visible !== false;
 });
 const visibleEnterpriseIds = new Set(enterprises.map(enterprise => String(enterprise.id)));
-const missingPublishedPrices = new Map([
-  // O CVCRM lista esta unidade disponível do Azure na tabela de outubro,
-  // mas ocasionalmente omite o preço na resposta detalhada.
-  ['AFM.01.1.416', 159990],
+const publishedUnitOverrides = new Map([
+  // Valores confirmados na tabela AZURE FRAGA MAIA - OUTUBRO - COMPLETA.
+  ['AFM.01.1.1', { price: 159990, appraisal: 222000 }],
+  ['AFM.01.1.8', { price: 159990, appraisal: 222000 }],
+  ['AFM.01.1.416', { price: 215990, appraisal: 245000 }],
 ]);
 const units = (sourceCatalog.units || [])
   .filter(unit => unit.status === 'disponivel' && visibleEnterpriseIds.has(String(unit.enterpriseId)))
-  .map(unit => Number(unit.price) > 0 || !missingPublishedPrices.has(String(unit.code || unit.internalId || ''))
-    ? unit
-    : { ...unit, price: missingPublishedPrices.get(String(unit.code || unit.internalId || '')), hasPrice: true })
+  .map(unit => {
+    const override = publishedUnitOverrides.get(String(unit.code || unit.internalId || ''));
+    if (!override || !normKey(unit.tableName).includes('outubro')) return unit;
+    return { ...unit, ...override, hasPrice: true };
+  })
   .map(unit => withPreservedAppraisal(unit, appraisalFallbackIndex));
 const lowestPriceByEnterprise = new Map();
 for (const unit of units) {

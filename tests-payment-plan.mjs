@@ -58,6 +58,12 @@ assert.equal(
   159990,
   'O cartão do Azure Fraga Maia deve exibir o menor preço publicado.'
 );
+const azureReference=availableAzureUnits.find(unit=>unit.code==='AFM.01.1.1');
+assert.equal(azureReference?.price,159990,'A unidade de referência do Azure deve usar o valor de venda da tabela completa.');
+assert.equal(azureReference?.appraisal,222000,'A unidade de referência do Azure deve usar a avaliação da tabela completa.');
+const azureCorrectedUnit=availableAzureUnits.find(unit=>unit.code==='AFM.01.1.416');
+assert.equal(azureCorrectedUnit?.price,215990,'O ajuste provisório não deve permanecer associado à unidade 416.');
+assert.equal(azureCorrectedUnit?.appraisal,245000,'A unidade 416 deve manter a avaliação correspondente da tabela completa.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
   false,
