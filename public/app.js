@@ -90,7 +90,7 @@ function statusBadge(status){return `<span class="badge ${escapeHtml(status)}">$
 function pageHead(eyebrow,title,description){return `<section class="page-head"><div class="container"><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div></section>`}
 // A disponibilidade vem do catálogo; apenas cadastros que não pertencem à
 // vitrine residencial ficam protegidos também na interface.
-function isHiddenEnterprise(name){const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');return ['aracastreetmall','testepagadoria','atlantaresidencepark','allegroresidence','acquaventureamerica'].includes(n)}
+function isHiddenEnterprise(name){const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');return ['aracastreetmall','testepagadoria','atlantaresidencepark','allegroresidence','acquaventureamerica'].includes(n)||n.includes('azure')||n.includes('vertexfragamaia')}
 function availableUnits(){return catalog.units.filter(u=>u.status==='disponivel'&&!isHiddenEnterprise(u.enterpriseName)&&enterpriseMedia(u.enterpriseName).visible)}
 function simulatorUnits(){return availableUnits().filter(u=>Number(u.price)>0)}
 function enterpriseDetailUrl(e){return enterpriseLinks[String(e.id)]||enterpriseLinks[e.name]||''}

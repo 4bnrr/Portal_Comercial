@@ -99,10 +99,16 @@ function withPreservedAppraisal(unit, fallbacks) {
 const appraisalFallbackIndex = appraisalFallbacks(catalogCandidates);
 const enterpriseMedia = readJson('enterprise-media.json', {});
 const hiddenNames = new Set(['aracastreetmall', 'testepagadoria', 'atlantaresidencepark', 'allegroresidence', 'acquaventureamerica']);
+function isHiddenEnterpriseName(value) {
+  const key = normKey(value);
+  return hiddenNames.has(key)
+    || key.includes('azure')
+    || key.includes('vertexfragamaia');
+}
 const enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
   const key = normKey(enterprise.name);
   return Number(enterprise.unidades_disponiveis ?? enterprise.availableUnits) > 0
-    && !hiddenNames.has(key)
+    && !isHiddenEnterpriseName(enterprise.name)
     && enterpriseMedia[key]?.visible !== false;
 });
 const visibleEnterpriseIds = new Set(enterprises.map(enterprise => String(enterprise.id)));
