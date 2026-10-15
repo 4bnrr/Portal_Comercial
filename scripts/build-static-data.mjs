@@ -104,16 +104,35 @@ function isHiddenEnterpriseName(value) {
   return hiddenNames.has(key)
     || key.includes('vertexfragamaia');
 }
-const enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
+let enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
   const key = normKey(enterprise.name);
   return Number(enterprise.unidades_disponiveis ?? enterprise.availableUnits) > 0
     && !isHiddenEnterpriseName(enterprise.name)
     && enterpriseMedia[key]?.visible !== false;
 });
 const visibleEnterpriseIds = new Set(enterprises.map(enterprise => String(enterprise.id)));
+const missingPublishedPrices = new Map([
+  // O CVCRM lista esta unidade disponível do Azure na tabela de outubro,
+  // mas ocasionalmente omite o preço na resposta detalhada.
+  ['AFM.01.1.416', 159990],
+]);
 const units = (sourceCatalog.units || [])
   .filter(unit => unit.status === 'disponivel' && visibleEnterpriseIds.has(String(unit.enterpriseId)))
+  .map(unit => Number(unit.price) > 0 || !missingPublishedPrices.has(String(unit.code || unit.internalId || ''))
+    ? unit
+    : { ...unit, price: missingPublishedPrices.get(String(unit.code || unit.internalId || '')), hasPrice: true })
   .map(unit => withPreservedAppraisal(unit, appraisalFallbackIndex));
+const lowestPriceByEnterprise = new Map();
+for (const unit of units) {
+  if (!(Number(unit.price) > 0)) continue;
+  const key = String(unit.enterpriseId);
+  const current = lowestPriceByEnterprise.get(key);
+  if (!(current > 0) || Number(unit.price) < current) lowestPriceByEnterprise.set(key, Number(unit.price));
+}
+enterprises = enterprises.map(enterprise => ({
+  ...enterprise,
+  lowestPrice: lowestPriceByEnterprise.get(String(enterprise.id)) ?? enterprise.lowestPrice,
+}));
 const catalog = { ...sourceCatalog, enterprises, units };
 const priceRows = readJson('price-history.json', []);
 const bootstrap = {

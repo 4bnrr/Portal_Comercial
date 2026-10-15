@@ -47,6 +47,17 @@ assert.equal(
 );
 const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='123'&&unit.status==='disponivel');
 assert.equal(availableFragaUnits.length,0,'O Vertex Fraga Maia deve permanecer oculto no catálogo publicado.');
+const availableAzureUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='124'&&unit.status==='disponivel');
+assert.equal(
+  Math.min(...availableAzureUnits.filter(unit=>Number(unit.price)>0).map(unit=>Number(unit.price))),
+  159990,
+  'O Azure Fraga Maia deve ser publicado a partir de R$ 159.990,00.'
+);
+assert.equal(
+  publishedCatalog.catalog.enterprises.find(enterprise=>String(enterprise.id)==='124')?.lowestPrice,
+  159990,
+  'O cartão do Azure Fraga Maia deve exibir o menor preço publicado.'
+);
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
   false,
@@ -64,3 +75,4 @@ console.log('OK — Acqua América:', {comissao:q.realEstateCommission, coordena
 console.log('OK — Vertex Getúlio:', {limite:vertex.maxPlanCapacity, imobiliaria:vertex.realEstateCommission, construtora:vertex.builderRisk, recursoProprio:vertex.ownResourcesMinimum});
 console.log('OK — Avaliações do Vertex:', {unidades:availableVertexUnits.length, comAvaliacao:availableVertexUnits.filter(unit=>Number(unit.appraisal)>0).length});
 console.log('OK — Vertex Fraga Maia oculto no portal.');
+console.log('OK — Azure Fraga Maia a partir de R$ 159.990,00.');
