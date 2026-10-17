@@ -16,6 +16,7 @@ let adminEnterpriseData = { entries: [], pending: [] };
 let backups = [];
 let readOnlyPortal = false;
 let staticPortal = false;
+let publicFeatureFlags = { vertexFragaMaiaVisible: false };
 const CVCRM_WORKFLOW_RUNS_URL='https://api.github.com/repos/4bnrr/Portal_Comercial/actions/workflows/vercel-hourly-sync.yml/runs?status=success&per_page=1';
 
 
@@ -42,12 +43,16 @@ async function refreshCvcrmConsultationStatus(){
 }
 async function loadAll(){
   if(location.hostname.endsWith('.vercel.app')){
-    const bootstrap=await api('/data/bootstrap.json',{cache:'no-store'});
+    const [bootstrap,remoteFlags]=await Promise.all([
+      api('/data/bootstrap.json',{cache:'no-store'}),
+      api('/api/public-config',{cache:'no-store'}).catch(()=>({}))
+    ]);
     catalog=bootstrap.catalog||catalog;
     enterpriseLinks=bootstrap.enterpriseLinks||{};
     paymentPlanRules=bootstrap.paymentPlanRules||paymentPlanRules;
     enterpriseMediaConfig=bootstrap.enterpriseMedia||{};
     priceHistory=bootstrap.priceHistory||priceHistory;
+    publicFeatureFlags={...publicFeatureFlags,...remoteFlags};
     readOnlyPortal=true;
     staticPortal=true;
     document.querySelector('nav a[data-route="administracao"]')?.remove();
@@ -90,7 +95,7 @@ function statusBadge(status){return `<span class="badge ${escapeHtml(status)}">$
 function pageHead(eyebrow,title,description){return `<section class="page-head"><div class="container"><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${description}</p></div></section>`}
 // A disponibilidade vem do catálogo; apenas cadastros que não pertencem à
 // vitrine residencial ficam protegidos também na interface.
-function isHiddenEnterprise(name){const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');return ['aracastreetmall','testepagadoria','atlantaresidencepark','allegroresidence','acquaventureamerica'].includes(n)||n.includes('vertexfragamaia')}
+function isHiddenEnterprise(name){const n=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');return ['aracastreetmall','testepagadoria','atlantaresidencepark','allegroresidence','acquaventureamerica'].includes(n)||(n.includes('vertexfragamaia')&&!publicFeatureFlags.vertexFragaMaiaVisible)}
 function availableUnits(){return catalog.units.filter(u=>u.status==='disponivel'&&!isHiddenEnterprise(u.enterpriseName)&&enterpriseMedia(u.enterpriseName).visible)}
 function simulatorUnits(){return availableUnits().filter(u=>Number(u.price)>0)}
 function enterpriseDetailUrl(e){return enterpriseLinks[String(e.id)]||enterpriseLinks[e.name]||''}
@@ -125,12 +130,13 @@ function normalizeEnterpriseName(name){
 function enterpriseMedia(name){
   const n=normalizeEnterpriseName(name);
   const cfg=enterpriseMediaConfig[n]||{};
+  const runtimeVisible=n.includes('vertexfragamaia')?publicFeatureFlags.vertexFragaMaiaVisible:cfg.visible!==false;
   return {
     image:cfg.image||'/assets/empreendimentos/placeholder.svg',
     imageFit:cfg.imageFit==='contain'?'contain':'cover',
     url:cfg.url||'',
     displayName:cfg.displayName||name,
-    visible:cfg.visible!==false,
+    visible:runtimeVisible,
     highlights:Array.isArray(cfg.highlights)?cfg.highlights:[]
   };
 }

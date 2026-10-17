@@ -56,17 +56,43 @@ function catalogFreshness(catalog) {
 // estático já publicado. Nunca permita que uma alteração visual faça o portal
 // regredir para essa cópia antiga. No GitHub Actions, a consulta recém-concluída
 // continua vencendo por possuir o lastSuccess mais recente.
-const sourceCatalog = [
+const baseSourceCatalog = [
   readJson('cache.json', null),
   readJson('vercel-cache.json', null),
   existing?.catalog || null,
 ].filter(Boolean).sort((a, b) => catalogFreshness(b) - catalogFreshness(a))[0] || emptyCatalog;
 const catalogCandidates = [
-  sourceCatalog,
+  baseSourceCatalog,
   readJson('cache.json', null),
   readJson('vercel-cache.json', null),
   existing?.catalog || null,
 ].filter(Boolean);
+
+function preserveRuntimeFlagEnterprises(primary, candidates) {
+  const enterprises = [...(primary.enterprises || [])];
+  const units = [...(primary.units || [])];
+  const enterpriseIds = new Set(enterprises.map(enterprise => String(enterprise.id)));
+  const unitIds = new Set(units.map(unit => `${unit.enterpriseId}:${unit.id}`));
+  const source = candidates.find(candidate =>
+    (candidate.enterprises || []).some(enterprise => normKey(enterprise.name).includes('vertexfragamaia'))
+  );
+  if (!source) return primary;
+  for (const enterprise of source.enterprises || []) {
+    if (!normKey(enterprise.name).includes('vertexfragamaia') || enterpriseIds.has(String(enterprise.id))) continue;
+    enterprises.push(enterprise);
+    enterpriseIds.add(String(enterprise.id));
+  }
+  for (const unit of source.units || []) {
+    if (!normKey(unit.enterpriseName).includes('vertexfragamaia')) continue;
+    const key = `${unit.enterpriseId}:${unit.id}`;
+    if (unitIds.has(key)) continue;
+    units.push(unit);
+    unitIds.add(key);
+  }
+  return { ...primary, enterprises, units };
+}
+
+const sourceCatalog = preserveRuntimeFlagEnterprises(baseSourceCatalog, catalogCandidates);
 
 function appraisalFallbacks(catalogs) {
   const byUnit = new Map();
@@ -101,14 +127,14 @@ const enterpriseMedia = readJson('enterprise-media.json', {});
 const hiddenNames = new Set(['aracastreetmall', 'testepagadoria', 'atlantaresidencepark', 'allegroresidence', 'acquaventureamerica']);
 function isHiddenEnterpriseName(value) {
   const key = normKey(value);
-  return hiddenNames.has(key)
-    || key.includes('vertexfragamaia');
+  return hiddenNames.has(key);
 }
 let enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
   const key = normKey(enterprise.name);
+  const runtimeControlled = key.includes('vertexfragamaia');
   return Number(enterprise.unidades_disponiveis ?? enterprise.availableUnits) > 0
     && !isHiddenEnterpriseName(enterprise.name)
-    && enterpriseMedia[key]?.visible !== false;
+    && (runtimeControlled || enterpriseMedia[key]?.visible !== false);
 });
 const visibleEnterpriseIds = new Set(enterprises.map(enterprise => String(enterprise.id)));
 const publishedUnitOverrides = new Map([

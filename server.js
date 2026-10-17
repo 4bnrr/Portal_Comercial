@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { get as getGlobalConfig } from '@vercel/global-config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1698,6 +1699,19 @@ app.get('/api/status', async (_, res) => {
   });
 });
 app.get('/api/catalog', async (_, res) => res.json(await readPersistedCatalog()));
+
+app.get('/api/public-config', async (_, res) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  let vertexFragaMaiaVisible = false;
+  if (IS_VERCEL) {
+    try {
+      vertexFragaMaiaVisible = (await getGlobalConfig('vertex_fraga_maia_visible')) === true;
+    } catch (error) {
+      console.warn('[GLOBAL CONFIG] Flag indisponível; Vertex Fraga Maia permanece oculto:', error.message);
+    }
+  }
+  res.json({ vertexFragaMaiaVisible });
+});
 
 app.get('/api/cron/sync', async (req, res) => {
   if (!IS_VERCEL) return res.status(404).json({ error: 'Agendamento disponível somente na Vercel.' });
