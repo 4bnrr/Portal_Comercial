@@ -50,6 +50,7 @@ const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(uni
 assert.ok(availableFragaUnits.length>0,'O catálogo deve preservar as unidades do Vertex Fraga Maia para a flag da Vercel.');
 const availableAzureUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='124'&&unit.status==='disponivel');
 assert.ok(availableAzureUnits.length>0,'O catálogo deve publicar as unidades disponíveis do Azure Fraga Maia.');
+assert.equal(availableAzureUnits.length,403,'O Azure deve publicar as 403 unidades ativas do relatório comercial.');
 assert.equal(
   Math.min(...availableAzureUnits.filter(unit=>Number(unit.price)>0).map(unit=>Number(unit.price))),
   159990,
@@ -71,6 +72,26 @@ assert.ok(
       && !/^BLOCO\s+\d+/i.test(String(unit.typology||''));
   }),
   'Cada unidade disponível do Azure deve usar o andar derivado do número, nunca o bloco.'
+);
+assert.deepEqual(
+  [...new Set(availableAzureUnits.map(unit=>unit.floor))].sort((a,b)=>a-b),
+  [0,1,2,3,4,5,6,7,8,9,10,11,12],
+  'O Azure deve disponibilizar tipologias do térreo ao 12º andar.'
+);
+const azureMinimumByFloor=new Map();
+for(const unit of availableAzureUnits){
+  const current=azureMinimumByFloor.get(unit.floor);
+  if(current===undefined||Number(unit.price)<current)azureMinimumByFloor.set(unit.floor,Number(unit.price));
+}
+assert.deepEqual(
+  [...azureMinimumByFloor.entries()].sort((a,b)=>a[0]-b[0]).map(([,price])=>price),
+  [159990,184990,190990,198990,205990,207990,208990,209990,210990,211990,212990,213990,214990],
+  'Os menores valores do Azure por andar devem coincidir com o relatório comercial.'
+);
+assert.equal(
+  publishedCatalog.catalog.enterprises.find(enterprise=>String(enterprise.id)==='124')?.unidades_disponiveis,
+  403,
+  'O cartão do Azure deve refletir as 403 unidades ativas do relatório.'
 );
 assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
 assert.equal(
