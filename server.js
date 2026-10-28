@@ -1160,15 +1160,27 @@ function isVertexFragaMaiaUnit(row) {
   const name = normKey(enterpriseName(row));
   return id === '123' || name.includes('residencialvertexfragamaia') || name === 'vertexfragamaia';
 }
+function isAzureFragaMaiaUnit(row) {
+  const id = enterpriseKey(row);
+  const name = normKey(enterpriseName(row));
+  return id === '124' || name.includes('azurefragamaia');
+}
 function isFloorGroupedVertexUnit(row) {
   const id = enterpriseKey(row);
   const name = normKey(enterpriseName(row));
-  return id === '121' || id === '123' || name.includes('vertexgetulio') || name.includes('residencialvertexfragamaia');
+  return id === '121' || id === '123' || id === '124'
+    || name.includes('vertexgetulio')
+    || name.includes('residencialvertexfragamaia')
+    || name.includes('azurefragamaia');
 }
 function vertexFloorNumber(row) {
   let floor = intValue(pick(row, ['andar','pavimento']));
   if (floor === null) {
-    const unitNumber = intValue(pick(row, ['nome','unidade','numero_unidade','numerounidade']));
+    const rawUnitNumber = pick(row, [
+      'nome','unidade','numero_unidade','numerounidade','idunidade_int','codigo','codigo_unidade'
+    ]);
+    const trailingNumber = String(rawUnitNumber ?? '').match(/(\d+)\s*$/)?.[1];
+    const unitNumber = intValue(trailingNumber);
     if (unitNumber !== null && unitNumber >= 0) floor = Math.floor(unitNumber / 100);
   }
   return floor;
@@ -1227,8 +1239,13 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     code: textValue(pick(identitySource, ['idunidade_int','codigo','codigo_unidade','unidade','nome']), id),
     developmentType: textValue(pick(identitySource, ['tipo_empreendimento'])),
     typology: floorGroupedVertexRow ? vertexFloorLabel(baseRow) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
-    // O Fraga Maia não possui diferenciação comercial entre Padrão e Com varanda.
-    commercialType: floorGroupedVertexRow && !isVertexFragaMaiaUnit(baseRow) ? vertexCommercialType(baseRow) : '',
+    // Vertex Fraga Maia e Azure são organizados apenas por andar, sem subdivisão
+    // comercial entre Padrão e Com varanda.
+    commercialType: floorGroupedVertexRow
+      && !isVertexFragaMaiaUnit(baseRow)
+      && !isAzureFragaMaiaUnit(baseRow)
+      ? vertexCommercialType(baseRow)
+      : '',
     stage: textValue(pick(identitySource, ['etapa'])),
     bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
     suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),

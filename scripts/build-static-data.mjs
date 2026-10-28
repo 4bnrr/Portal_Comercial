@@ -129,6 +129,39 @@ function isHiddenEnterpriseName(value) {
   const key = normKey(value);
   return hiddenNames.has(key);
 }
+
+function withFloorTypology(unit) {
+  const enterprise = normKey(unit.enterpriseName);
+  const floorGrouped = String(unit.enterpriseId) === '121'
+    || String(unit.enterpriseId) === '123'
+    || String(unit.enterpriseId) === '124'
+    || enterprise.includes('vertexgetulio')
+    || enterprise.includes('residencialvertexfragamaia')
+    || enterprise.includes('azurefragamaia');
+  if (!floorGrouped) return unit;
+
+  const unitCode = String(unit.code || unit.internalId || unit.id || '');
+  const trailingNumber = unitCode.match(/(\d+)\s*$/)?.[1];
+  const unitNumber = trailingNumber === undefined ? NaN : Number(trailingNumber);
+  const isAzure = enterprise.includes('azurefragamaia');
+  const hasFloor = unit.floor !== null && unit.floor !== undefined && String(unit.floor).trim() !== '';
+  let floor = isAzure && Number.isFinite(unitNumber)
+    ? Math.floor(unitNumber / 100)
+    : (hasFloor ? Number(unit.floor) : NaN);
+  if (!Number.isInteger(floor) || floor < 0) {
+    if (!Number.isFinite(unitNumber) || unitNumber < 0) return unit;
+    floor = Math.floor(unitNumber / 100);
+  }
+
+  return {
+    ...unit,
+    floor,
+    typology: floor === 0 ? 'Térreo' : `${floor}º andar`,
+    commercialType: isAzure || enterprise.includes('vertexfragamaia')
+      ? ''
+      : unit.commercialType,
+  };
+}
 let enterprises = (sourceCatalog.enterprises || []).filter(enterprise => {
   const key = normKey(enterprise.name);
   const runtimeControlled = key.includes('vertexfragamaia');
@@ -150,6 +183,7 @@ const units = (sourceCatalog.units || [])
     if (!override || !normKey(unit.tableName).includes('outubro')) return unit;
     return { ...unit, ...override, hasPrice: true };
   })
+  .map(withFloorTypology)
   .map(unit => withPreservedAppraisal(unit, appraisalFallbackIndex));
 const lowestPriceByEnterprise = new Map();
 for (const unit of units) {

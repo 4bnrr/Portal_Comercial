@@ -192,8 +192,10 @@ function varandaCategory(u){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toUpperCase();
 
-  // VERTEX: cada pavimento é uma tipologia comercial independente.
-  if(enterprise.includes('VERTEX GETULIO')||enterprise.includes('RESIDENCIAL VERTEX FRAGA MAIA')){
+  // VERTEX/AZURE: cada pavimento é uma tipologia comercial independente.
+  // No Azure, o CVCRM informa "BLOCO" como tipologia, mas o andar está no
+  // número final do código (0–99 térreo, 100–199 primeiro andar etc.).
+  if(enterprise.includes('VERTEX GETULIO')||enterprise.includes('RESIDENCIAL VERTEX FRAGA MAIA')||enterprise.includes('AZURE FRAGA MAIA')){
     const configured=String(u.typology||'').trim();
     if(configured.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()==='terreo') return 'Térreo';
     const configuredFloor=configured.match(/^(\d+)º andar$/i);
@@ -201,9 +203,20 @@ function varandaCategory(u){
       const floor=Number(configuredFloor[1]);
       return floor>=1?`${floor}º andar`:'';
     }
-    const floor=Number(u.floor);
+    const unitCode=String(u.code||u.internalId||u.id||'');
+    const unitNumber=Number(unitCode.match(/(\d+)\s*$/)?.[1]);
+    if(enterprise.includes('AZURE FRAGA MAIA')&&Number.isFinite(unitNumber)&&unitNumber>=0){
+      const derivedFloor=Math.floor(unitNumber/100);
+      return derivedFloor===0?'Térreo':`${derivedFloor}º andar`;
+    }
+    const hasFloor=u.floor!==null&&u.floor!==undefined&&String(u.floor).trim()!=='';
+    const floor=hasFloor?Number(u.floor):NaN;
     if(Number.isFinite(floor)&&floor===0) return 'Térreo';
     if(Number.isFinite(floor)&&floor>=1) return `${floor}º andar`;
+    if(Number.isFinite(unitNumber)&&unitNumber>=0){
+      const derivedFloor=Math.floor(unitNumber/100);
+      return derivedFloor===0?'Térreo':`${derivedFloor}º andar`;
+    }
     return '';
   }
 
@@ -300,14 +313,19 @@ function enterpriseVarandaMinimumRows(){
 function commercialRowLabel(r){return String(r._displayLabel||enterpriseDisplayName(r.enterpriseName)||'')}
 function isVertexCommercialRow(r){
   const enterprise=normalizeEnterpriseName(r?.enterpriseName);
-  return enterprise.includes('vertexgetulio')||enterprise.includes('residencialvertexfragamaia');
+  return enterprise.includes('vertexgetulio')
+    ||enterprise.includes('residencialvertexfragamaia')
+    ||enterprise.includes('azurefragamaia');
 }
 function isVertexFragaMaia(r){
   const enterprise=normalizeEnterpriseName(typeof r==='string'?r:r?.enterpriseName);
   return enterprise.includes('residencialvertexfragamaia')||enterprise==='vertexfragamaia';
 }
+function isAzureFragaMaia(r){
+  return normalizeEnterpriseName(typeof r==='string'?r:r?.enterpriseName).includes('azurefragamaia');
+}
 function vertexCommercialTypeLabel(r){
-  if(isVertexFragaMaia(r)) return '';
+  if(isVertexFragaMaia(r)||isAzureFragaMaia(r)) return '';
   return String(r?.commercialType||'Padrão').trim()||'Padrão';
 }
 function vertexCommercialDisplayName(enterpriseName,type){

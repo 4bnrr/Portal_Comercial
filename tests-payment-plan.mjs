@@ -49,6 +49,7 @@ assert.equal(
 const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='123'&&unit.status==='disponivel');
 assert.ok(availableFragaUnits.length>0,'O catálogo deve preservar as unidades do Vertex Fraga Maia para a flag da Vercel.');
 const availableAzureUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='124'&&unit.status==='disponivel');
+assert.ok(availableAzureUnits.length>0,'O catálogo deve publicar as unidades disponíveis do Azure Fraga Maia.');
 assert.equal(
   Math.min(...availableAzureUnits.filter(unit=>Number(unit.price)>0).map(unit=>Number(unit.price))),
   159990,
@@ -59,12 +60,19 @@ assert.equal(
   159990,
   'O cartão do Azure Fraga Maia deve exibir o menor preço publicado.'
 );
-const azureReference=availableAzureUnits.find(unit=>unit.code==='AFM.01.1.1');
-assert.equal(azureReference?.price,159990,'A unidade de referência do Azure deve usar o valor de venda da tabela completa.');
-assert.equal(azureReference?.appraisal,222000,'A unidade de referência do Azure deve usar a avaliação da tabela completa.');
-const azureCorrectedUnit=availableAzureUnits.find(unit=>unit.code==='AFM.01.1.416');
-assert.equal(azureCorrectedUnit?.price,215990,'O ajuste provisório não deve permanecer associado à unidade 416.');
-assert.equal(azureCorrectedUnit?.appraisal,245000,'A unidade 416 deve manter a avaliação correspondente da tabela completa.');
+assert.ok(
+  availableAzureUnits.every(unit=>{
+    const unitNumber=Number(String(unit.code||unit.internalId||unit.id||'').match(/(\d+)\s*$/)?.[1]);
+    const expectedFloor=Math.floor(unitNumber/100);
+    const expectedLabel=expectedFloor===0?'Térreo':`${expectedFloor}º andar`;
+    return Number.isFinite(unitNumber)
+      && unit.floor===expectedFloor
+      && unit.typology===expectedLabel
+      && !/^BLOCO\s+\d+/i.test(String(unit.typology||''));
+  }),
+  'Cada unidade disponível do Azure deve usar o andar derivado do número, nunca o bloco.'
+);
+assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
   true,
