@@ -70,6 +70,8 @@ assert.ok(
 );
 assert.match(serverSource,/AZURE_PRICE_TABLE_ID\s*=\s*1484/,'O Azure deve consultar exclusivamente a tabela 1484 do CV.');
 assert.match(serverSource,/azureTableDriven[\s\S]*dashboardRow \? 'disponivel' : 'indisponivel'/,'A presença na tabela 1484 deve controlar a disponibilidade do Azure.');
+assert.match(serverSource,/sourceRow:\s*row/,'A tabela 1484 deve preservar o número comercial da unidade para calcular o andar.');
+assert.match(serverSource,/const floorSource = azureTableDriven[\s\S]*dashboardRow\.sourceRow[\s\S]*: baseRow/,'O Azure deve calcular o andar pelo número comercial da tabela, não pelo ID interno do CVDW.');
 assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),

@@ -730,6 +730,10 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePre
           // atual continua vindo de /unidades/situacao para não reabrir vendas.
           status: allowAnyTable ? null : deriveStatus(row),
           tableName,
+          // Mantém o número comercial (ex.: 1001, 1103, 1206) da tabela.
+          // O CVDW /unidades usa outro identificador interno, que não representa
+          // o andar do Azure.
+          sourceRow: row,
         };
         for (const key of detailedUnitKeys(row)) index.set(key, detail);
       }
@@ -1227,6 +1231,9 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
   // Padrão e Com varanda que voltaram a ficar disponíveis.
   const floorGroupedVertexRow = isFloorGroupedVertexUnit(baseRow);
   const azureTableDriven = isAzureFragaMaiaUnit(baseRow) && preserveBaseIdentity;
+  const floorSource = azureTableDriven && dashboardRow?.sourceRow
+    ? dashboardRow.sourceRow
+    : baseRow;
   const vertexAvailable = floorGroupedVertexRow
     && intValue(pick(baseRow, ['situacao_para_venda','situacaoparavenda'])) === 1;
   const resolvedStatus = azureTableDriven
@@ -1252,9 +1259,12 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     enterpriseId: eId,
     enterpriseInternalId: textValue(pick(identitySource, ['idempreendimento_int'])),
     enterpriseName: enterpriseName(identitySource),
-    code: textValue(pick(identitySource, ['idunidade_int','codigo','codigo_unidade','unidade','nome']), id),
+    code: textValue(pick(
+      azureTableDriven && dashboardRow?.sourceRow ? dashboardRow.sourceRow : identitySource,
+      ['unidade','numero_unidade','numerounidade','codigo','codigo_unidade','idunidade_int','nome']
+    ), id),
     developmentType: textValue(pick(identitySource, ['tipo_empreendimento'])),
-    typology: floorGroupedVertexRow ? vertexFloorLabel(baseRow) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
+    typology: floorGroupedVertexRow ? vertexFloorLabel(floorSource) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
     // Vertex Fraga Maia e Azure são organizados apenas por andar, sem subdivisão
     // comercial entre Padrão e Com varanda.
     commercialType: floorGroupedVertexRow
@@ -1266,7 +1276,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
     suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),
     tower: textValue(pick(identitySource, ['bloco','torre','nome_bloco','nomebloco','bloco_nome'])),
-    floor: floorGroupedVertexRow ? vertexFloorNumber(baseRow) : intValue(pick(identitySource, ['andar','pavimento'])),
+    floor: floorGroupedVertexRow ? vertexFloorNumber(floorSource) : intValue(pick(identitySource, ['andar','pavimento'])),
     area: numberValue(pick(identitySource, ['area_privativa','areaprivativa','area_privativa_total','area_total','areatotal','area'])),
     parkingSpaces: intValue(pick(identitySource, ['vagas_garagem','qtde_vagas_garagem','vagas','vagasgaragem','quantidade_vagas'])),
     price,
