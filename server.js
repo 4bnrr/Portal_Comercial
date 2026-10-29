@@ -80,6 +80,10 @@ if (IS_VERCEL) {
 }
 
 const emptyCache = { lastSync: null, lastSuccess: null, status: 'not_configured', error: null, enterprises: [], units: [], stats: {} };
+function catalogFreshness(catalog) {
+  const timestamp = Date.parse(catalog?.lastSuccess || catalog?.lastSync || 0);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
 const jsonCache = new Map();
 function readJson(file, fallback) {
   try {
@@ -146,10 +150,14 @@ async function persistCatalog(cache) {
   persistedCatalogLoadedAt = Date.now();
 }
 if (!IS_VERCEL) {
-  if (!fs.existsSync(CACHE_FILE)) {
-    const bundledVercelCache = path.join(BUNDLED_DATA_DIR, 'vercel-cache.json');
-    const publishedCatalog = readJson(STATIC_BOOTSTRAP_FILE, {})?.catalog || emptyCache;
-    const initialCache = SYNC_ONCE_MODE ? readJson(bundledVercelCache, publishedCatalog) : emptyCache;
+  const bundledVercelCache = path.join(BUNDLED_DATA_DIR, 'vercel-cache.json');
+  const publishedCatalog = readJson(STATIC_BOOTSTRAP_FILE, {})?.catalog || emptyCache;
+  const currentCache = readJson(CACHE_FILE, null);
+  if (!currentCache || (SYNC_ONCE_MODE && catalogFreshness(publishedCatalog) > catalogFreshness(currentCache))) {
+    const initialCache = SYNC_ONCE_MODE
+      ? [publishedCatalog, readJson(bundledVercelCache, null), currentCache].filter(Boolean)
+        .sort((a, b) => catalogFreshness(b) - catalogFreshness(a))[0] || emptyCache
+      : emptyCache;
     writeJson(CACHE_FILE, initialCache);
   }
   if (!fs.existsSync(MATERIALS_FILE)) writeJson(MATERIALS_FILE, []);
@@ -303,6 +311,8 @@ const CVCRM_MIN_GAP_MS = Math.max(3200, Number(process.env.CVCRM_REQUEST_GAP_MS 
 const CVCRM_PHASE_GAP_MS = Math.max(0, Number(process.env.CVCRM_PHASE_GAP_MS || 0));
 const CVCRM_429_MIN_COOLDOWN_MS = Math.max(60000, Number(process.env.CVCRM_429_COOLDOWN_MS || 60000));
 const CVCRM_TRANSIENT_RETRY_DELAY_MS = Math.max(1000, Number(process.env.CVCRM_TRANSIENT_RETRY_DELAY_MS || 10000));
+const CVDW_INCREMENTAL_OVERLAP_MS = Math.max(5 * 60 * 1000, Number(process.env.CVDW_INCREMENTAL_OVERLAP_MS || 10 * 60 * 1000));
+const CVDW_FULL_SYNC_INTERVAL_MS = Math.max(60 * 60 * 1000, Number(process.env.CVDW_FULL_SYNC_INTERVAL_HOURS || 24) * 60 * 60 * 1000);
 
 let syncProgress = {
   phase: 'idle',
@@ -428,10 +438,13 @@ function retryAfterMs(response, attempt) {
   return Math.max(CVCRM_429_MIN_COOLDOWN_MS, serverWait + 10000, escalating);
 }
 
-async function cvGet(endpoint, page, pageSize = 500) {
+async function cvGet(endpoint, page, pageSize = 500, params = {}) {
   const url = new URL(endpoint, baseUrl());
   url.searchParams.set('pagina', String(page));
   url.searchParams.set('registros_por_pagina', String(pageSize));
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+  }
 
   let transientHttpRetries = 0;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -493,7 +506,7 @@ async function cvGet(endpoint, page, pageSize = 500) {
   throw new Error('CVCRM: número máximo de tentativas excedido.');
 }
 
-async function fetchAll(endpoint, label) {
+async function fetchAll(endpoint, label, params = {}) {
   const rows = [];
   let page = 1;
   let totalPages = 1;
@@ -509,7 +522,7 @@ async function fetchAll(endpoint, label) {
       retryWaitSeconds: null,
     });
 
-    const payload = await cvGet(endpoint, page, 500);
+    const payload = await cvGet(endpoint, page, 500, params);
     const chunk = recordArray(payload);
     const info = paginationInfo(payload, page);
 
@@ -988,6 +1001,98 @@ function enterpriseName(row) {
     'Empreendimento não informado'
   );
 }
+
+function cvcrmReferenceDate(timestamp) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(timestamp));
+  const value = type => parts.find(part => part.type === type)?.value;
+  return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}:${value('second')}`;
+}
+
+function incrementalReferenceSince(previousCache) {
+  const lastSuccess = Date.parse(previousCache?.lastSuccess || '');
+  if (!Number.isFinite(lastSuccess)) return null;
+  return cvcrmReferenceDate(lastSuccess - CVDW_INCREMENTAL_OVERLAP_MS);
+}
+
+function lastFullCvdwSuccess(previousCache) {
+  const explicit = previousCache?.stats?.lastFullSuccess;
+  if (explicit) return explicit;
+  // Catálogos anteriores à sincronização incremental sempre eram cargas completas.
+  return previousCache?.stats?.syncMode ? null : previousCache?.lastSuccess || null;
+}
+
+function shouldRunFullCvdwSync(previousCache) {
+  if (String(process.env.CVCRM_FORCE_FULL_SYNC || '').toLowerCase() === 'true') return true;
+  if (!Array.isArray(previousCache?.units) || !previousCache.units.length) return true;
+  const lastFullSuccess = Date.parse(lastFullCvdwSuccess(previousCache) || '');
+  return !Number.isFinite(lastFullSuccess) || Date.now() - lastFullSuccess >= CVDW_FULL_SYNC_INTERVAL_MS;
+}
+
+function catalogUnitToSourceRow(unit) {
+  return {
+    idunidade: unit.id,
+    idunidade_int: unit.internalId,
+    idempreendimento: unit.enterpriseId,
+    idempreendimento_int: unit.enterpriseInternalId,
+    empreendimento: unit.enterpriseName,
+    tipo_empreendimento: unit.developmentType,
+    unidade: unit.code,
+    bloco: unit.tower,
+    etapa: unit.stage,
+    andar: unit.floor,
+    tipologia: unit.typology,
+    area_privativa: unit.area,
+    qtde_quartos: unit.bedrooms,
+    qtde_suites: unit.suites,
+    vagas_garagem: unit.parkingSpaces,
+    situacao: unit.status,
+    situacao_para_venda: unit.status === 'disponivel' ? 1 : 0,
+    valor: unit.price,
+    valor_avaliacao: unit.appraisal,
+    tabela: unit.tableName,
+    ativo_painel: 'A',
+    referencia_data: unit.updatedAt,
+  };
+}
+
+function mergeIncrementalCvdwState(previousCache, unitsDelta, situationDelta, priceDelta) {
+  const previousRows = (previousCache.units || []).map(catalogUnitToSourceRow);
+  const rows = new Map();
+  const findCanonical = row => {
+    const enterprise = enterpriseKey(row);
+    const identity = textValue(pick(row, [
+      'idunidade','id_unidade','idunidade_int','id_unidade_int','referencia','codigo','codigo_unidade'
+    ]));
+    return identity ? `${enterprise || 'sem-empreendimento'}:${identity}` : null;
+  };
+  const upsert = row => {
+    const canonical = findCanonical(row);
+    if (!canonical) return;
+    const previous = rows.get(canonical) || {};
+    rows.set(canonical, { ...previous, ...row });
+  };
+  const seedIfMissing = row => {
+    const canonical = findCanonical(row);
+    if (!canonical || rows.has(canonical)) return;
+    upsert(row);
+  };
+
+  for (const row of previousRows) upsert(row);
+  for (const row of unitsDelta) upsert(row);
+  for (const row of situationDelta) seedIfMissing(row);
+  for (const row of priceDelta) seedIfMissing(row);
+
+  return {
+    unitsRows: [...rows.values()],
+    situationRows: [...previousRows, ...situationDelta],
+    priceRows: [...previousRows, ...priceDelta],
+    previousRows,
+  };
+}
 function yesValue(v) {
   const x = normKey(v);
   return ['s','sim','1','true','yes','ativo','aprovado'].includes(x);
@@ -1464,27 +1569,61 @@ async function syncCvcrm(trigger = 'manual') {
   let priceRows = [];
   let appraisalData = { perEnterprise: new Map(), commercialDashboards: new Map(), diagnostics: [] };
   let merged = { units: [], allUnits: [], enterprises: [], allEnterprises: [] };
+  let syncMode = 'full';
+  let incrementalSince = null;
+  let deltaCounts = { unidades: 0, situacoes: 0, precos: 0 };
 
   try {
     await respectPersistentCooldown();
 
-    unitsRows = await fetchAll('/api/v1/cvdw/unidades', '1/3 • Baixando unidades');
-    if (!unitsRows.length) {
-      throw new Error('A API /unidades respondeu sem registros. O catálogo anterior foi preservado.');
-    }
+    const fetchFullCvdw = async () => {
+      const fullUnits = await fetchAll('/api/v1/cvdw/unidades', '1/3 • Carga completa de unidades');
+      if (!fullUnits.length) throw new Error('A API /unidades respondeu sem registros.');
+      await waitBetweenPhases('situações');
+      const fullSituations = await fetchAll('/api/v1/cvdw/unidades/situacao', '2/3 • Carga completa de situações');
+      if (!fullSituations.length) throw new Error('A API /unidades/situacao respondeu sem registros.');
+      await waitBetweenPhases('preços');
+      const fullPrices = await fetchAll('/api/v1/cvdw/unidades/precos', '3/3 • Carga completa de preços');
+      if (!fullPrices.length) throw new Error('A API /unidades/precos respondeu sem registros.');
+      return { unitsRows: fullUnits, situationRows: fullSituations, priceRows: fullPrices };
+    };
 
-    await waitBetweenPhases('situações');
-
-    situationRows = await fetchAll('/api/v1/cvdw/unidades/situacao', '2/3 • Baixando situações');
-    if (!situationRows.length) {
-      throw new Error('A API /unidades/situacao respondeu sem registros. O catálogo anterior foi preservado.');
-    }
-
-    await waitBetweenPhases('preços');
-
-    priceRows = await fetchAll('/api/v1/cvdw/unidades/precos', '3/3 • Baixando preços');
-    if (!priceRows.length) {
-      throw new Error('A API /unidades/precos respondeu sem registros. O catálogo anterior foi preservado.');
+    const requestedFullSync = shouldRunFullCvdwSync(previousCache);
+    incrementalSince = requestedFullSync ? null : incrementalReferenceSince(previousCache);
+    if (!requestedFullSync && incrementalSince) {
+      syncMode = 'incremental';
+      const params = { a_partir_data_referencia: incrementalSince };
+      try {
+        const unitsDelta = await fetchAll('/api/v1/cvdw/unidades', '1/3 • Alterações de unidades', params);
+        await waitBetweenPhases('situações');
+        const situationDelta = await fetchAll('/api/v1/cvdw/unidades/situacao', '2/3 • Alterações de situações', params);
+        await waitBetweenPhases('preços');
+        const priceDelta = await fetchAll('/api/v1/cvdw/unidades/precos', '3/3 • Alterações de preços', params);
+        deltaCounts = {
+          unidades: unitsDelta.length,
+          situacoes: situationDelta.length,
+          precos: priceDelta.length,
+        };
+        const incremental = mergeIncrementalCvdwState(previousCache, unitsDelta, situationDelta, priceDelta);
+        unitsRows = incremental.unitsRows;
+        situationRows = incremental.situationRows;
+        priceRows = incremental.priceRows;
+        if (!unitsRows.length) throw new Error('A base incremental não possui unidades para cruzamento.');
+        const minimumExpectedSources = Math.max(1, Math.floor((previousCache.units || []).length * 0.8));
+        if (unitsRows.length < minimumExpectedSources) {
+          throw new Error(`A base incremental preservou somente ${unitsRows.length} de ${(previousCache.units || []).length} unidades.`);
+        }
+      } catch (error) {
+        console.warn(`[CVCRM] Carga incremental falhou: ${error.message}. Executando carga completa.`);
+        syncMode = 'fallback-full';
+        incrementalSince = null;
+        ({ unitsRows, situationRows, priceRows } = await fetchFullCvdw());
+        deltaCounts = { unidades: unitsRows.length, situacoes: situationRows.length, precos: priceRows.length };
+      }
+    } else {
+      syncMode = 'full';
+      ({ unitsRows, situationRows, priceRows } = await fetchFullCvdw());
+      deltaCounts = { unidades: unitsRows.length, situacoes: situationRows.length, precos: priceRows.length };
     }
 
     // O CVDW de preços não contém a coluna comercial "VALOR DO IMÓVEL (1x)".
@@ -1545,6 +1684,14 @@ async function syncCvcrm(trigger = 'manual') {
         unitsSource: unitsRows.length,
         situationsSource: situationRows.length,
         pricesSource: priceRows.length,
+        syncMode,
+        incrementalSince,
+        deltaUnits: deltaCounts.unidades,
+        deltaSituations: deltaCounts.situacoes,
+        deltaPrices: deltaCounts.precos,
+        lastFullSuccess: syncMode === 'full' || syncMode === 'fallback-full'
+          ? finished
+          : lastFullCvdwSuccess(previousCache),
         allEnterprises: merged.allEnterprises.length,
         commercialEnterprises: merged.enterprises.length,
         unitsNormalized: merged.units.length,
@@ -1555,6 +1702,10 @@ async function syncCvcrm(trigger = 'manual') {
         partial: false,
       },
     };
+
+    integrity.syncMode = syncMode;
+    integrity.incrementalSince = incrementalSince;
+    integrity.deltaCounts = deltaCounts;
 
     writeJson(INTEGRITY_FILE, integrity);
     writeJson(RAW_FILE, {

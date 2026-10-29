@@ -41,6 +41,8 @@ jobs:
           CVCRM_REQUEST_GAP_MS: 3200
           CVCRM_PHASE_GAP_MS: 0
           CVCRM_AUTO_SYNC: false
+          CVDW_INCREMENTAL_OVERLAP_MS: 600000
+          CVDW_FULL_SYNC_INTERVAL_HOURS: 24
         run: node server.js --sync-once
 
       - name: Gerar catalogo estatico

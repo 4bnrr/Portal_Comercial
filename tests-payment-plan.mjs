@@ -10,6 +10,7 @@ const configuredRules=JSON.parse(await readFile(new URL('./data/payment-plan-rul
 const publishedCatalog=JSON.parse(await readFile(new URL('./public/data/bootstrap.json',import.meta.url),'utf8'));
 const portalApp=await readFile(new URL('./public/app.js',import.meta.url),'utf8');
 const serverSource=await readFile(new URL('./server.js',import.meta.url),'utf8');
+const syncWorkflow=await readFile(new URL('./.github/workflows/vercel-hourly-sync.yml',import.meta.url),'utf8');
 
 const s=calculatePaymentPlan(baseInput,standard);
 assert.equal(s.maxPlanCapacity,27000);
@@ -72,6 +73,11 @@ assert.match(serverSource,/AZURE_PRICE_TABLE_ID\s*=\s*1484/,'O Azure deve consul
 assert.match(serverSource,/azureTableDriven[\s\S]*dashboardRow \? 'disponivel' : 'indisponivel'/,'A presença na tabela 1484 deve controlar a disponibilidade do Azure.');
 assert.match(serverSource,/sourceRow:\s*row/,'A tabela 1484 deve preservar o número comercial da unidade para calcular o andar.');
 assert.match(serverSource,/const floorSource = azureTableDriven[\s\S]*dashboardRow\.sourceRow[\s\S]*: baseRow/,'O Azure deve calcular o andar pelo número comercial da tabela, não pelo ID interno do CVDW.');
+assert.match(serverSource,/a_partir_data_referencia:\s*incrementalSince/,'As consultas frequentes devem solicitar apenas registros alterados desde a última sincronização.');
+assert.match(serverSource,/Carga incremental falhou:[\s\S]*Executando carga completa/,'Uma falha incremental deve acionar automaticamente a carga completa.');
+assert.match(serverSource,/lastFullSuccess[\s\S]*CVDW_FULL_SYNC_INTERVAL_MS/,'A carga completa diária deve permanecer registrada no catálogo.');
+assert.match(syncWorkflow,/cron:\s*"2,17,32,47 \* \* \* \*"/,'O CVCRM deve ser consultado a cada 15 minutos.');
+assert.match(syncWorkflow,/CVDW_FULL_SYNC_INTERVAL_HOURS:\s*24/,'O workflow deve realizar uma carga completa a cada 24 horas.');
 assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
