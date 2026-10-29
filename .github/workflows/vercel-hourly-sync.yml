@@ -2,8 +2,10 @@ name: Sincronizar CVCRM na Vercel
 
 on:
   schedule:
-    # Executa a cada 15 minutos, evitando o pico do minuto zero.
+    # Executa a cada 15 minutos (UTC).
     - cron: "2,17,32,47 * * * *"
+
+  # Permite iniciar manualmente pelo GitHub Actions.
   workflow_dispatch:
 
 permissions:
@@ -15,6 +17,7 @@ concurrency:
 
 jobs:
   sync:
+    name: Sincronizar dados do CVCRM
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -23,26 +26,30 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Preparar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22"
           cache: npm
 
       - name: Instalar dependencias
         run: npm ci --omit=dev
 
-      - name: Consultar CVCRM e publicar catalogo
+      - name: Consultar CVCRM e atualizar dados
         env:
           CVCRM_DOMAIN: ${{ secrets.CVCRM_DOMAIN }}
           CVCRM_EMAIL: ${{ secrets.CVCRM_EMAIL }}
           CVCRM_TOKEN: ${{ secrets.CVCRM_TOKEN }}
-          CVCRM_REQUEST_GAP_MS: 3200
-          CVCRM_PHASE_GAP_MS: 0
-          CVCRM_AUTO_SYNC: false
-          CVDW_INCREMENTAL_OVERLAP_MS: 600000
-          CVDW_FULL_SYNC_INTERVAL_HOURS: 24
+
+          CVCRM_REQUEST_GAP_MS: "3200"
+          CVCRM_PHASE_GAP_MS: "0"
+          CVCRM_AUTO_SYNC: "false"
+
+          CVDW_INCREMENTAL_OVERLAP_MS: "600000"
+          CVDW_FULL_SYNC_INTERVAL_HOURS: "24"
+
         run: node server.js --sync-once
 
       - name: Gerar catalogo estatico
@@ -51,6 +58,8 @@ jobs:
       - name: Salvar catalogo atualizado
         shell: bash
         run: |
+          set -e
+
           git config user.name "estacao1-sync"
           git config user.email "actions@users.noreply.github.com"
 
@@ -64,24 +73,24 @@ jobs:
           git commit -m "data: atualiza catalogo CVCRM"
 
           for tentativa in 1 2 3; do
-            echo "Tentativa $tentativa de sincronizacao"
+            echo "Tentativa $tentativa de publicacao"
 
             git fetch origin main
 
             if ! git rebase origin/main; then
-              echo "Conflito durante o rebase"
+              echo "Conflito durante o rebase."
               git rebase --abort
               exit 1
             fi
 
             if git push origin HEAD:main; then
-              echo "Catalogo atualizado com sucesso"
+              echo "Catalogo atualizado com sucesso."
               exit 0
             fi
 
-            echo "Push rejeitado. Tentando novamente"
+            echo "Push rejeitado. Nova tentativa em 5 segundos."
             sleep 5
           done
 
-          echo "Falha apos 3 tentativas"
+          echo "Falha ao publicar catalogo apos 3 tentativas."
           exit 1
