@@ -1,6 +1,6 @@
 # Vigia CVCRM no Supabase
 
-O vigia é executado 30 minutos depois de cada janela principal do GitHub Actions. Ele consulta o histórico do workflow e:
+O vigia é executado cinco minutos depois de cada janela de 15 minutos do GitHub Actions. Ele consulta o histórico do workflow e:
 
 - não faz nada quando existe uma execução recente, na fila ou em andamento;
 - dispara `workflow_dispatch` quando a última execução bem-sucedida está atrasada;
@@ -29,4 +29,4 @@ Nenhum desses valores deve ser salvo no Git.
 5. Aplique a migration `20261013150000_schedule_cvcrm_watchdog.sql`.
 6. Faça uma chamada de teste e confirme o resultado no histórico do Cron.
 
-O cron usa UTC e roda às `00:47`, `04:47`, `08:47`, `12:47`, `16:47` e `20:47`, sempre 30 minutos depois do agendamento principal.
+O cron usa UTC e roda nos minutos `07`, `22`, `37` e `52`, sempre cinco minutos depois do agendamento principal. Se a última execução bem-sucedida tiver mais de 16 minutos, o vigia dispara uma nova execução.

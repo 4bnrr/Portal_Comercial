@@ -1,6 +1,6 @@
 const ACTIVE_STATUSES = new Set(['queued', 'in_progress', 'waiting', 'requested', 'pending']);
 
-export function decideWatchdogAction(runs, now = Date.now(), staleAfterMinutes = 210) {
+export function decideWatchdogAction(runs, now = Date.now(), staleAfterMinutes = 16) {
   const list = Array.isArray(runs) ? runs : [];
   const recentActive = list.find(run => {
     if (!ACTIVE_STATUSES.has(String(run?.status || '').toLowerCase())) return false;

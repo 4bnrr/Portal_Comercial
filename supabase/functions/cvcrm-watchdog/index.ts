@@ -49,7 +49,9 @@ Deno.serve(async request => {
     }
 
     const runsPayload = await runsResponse.json();
-    const decision = decideWatchdogAction(runsPayload.workflow_runs, Date.now(), 210);
+    // O agendamento principal ocorre nos minutos 02, 17, 32 e 47. O vigia
+    // roda cinco minutos depois e recupera a janela caso o GitHub não a crie.
+    const decision = decideWatchdogAction(runsPayload.workflow_runs, Date.now(), 16);
     if (decision.action !== 'dispatch') {
       return json({ ok: true, dispatched: false, ...decision });
     }
