@@ -2,8 +2,6 @@ name: Sincronizar CVCRM na Vercel
 
 on:
   schedule:
-    # Evita o congestionamento do GitHub Actions no início da hora.
-    # Continua executando a consulta em intervalos de 4 horas.
     - cron: "17 */4 * * *"
   workflow_dispatch:
 
@@ -18,9 +16,12 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
     steps:
       - name: Baixar portal
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Preparar Node.js
         uses: actions/setup-node@v4
@@ -44,7 +45,8 @@ jobs:
       - name: Gerar catalogo estatico
         run: npm run build:static-data
 
-           - name: Salvar catalogo atualizado
+      - name: Salvar catalogo atualizado
+        shell: bash
         run: |
           git config user.name "estacao1-sync"
           git config user.email "actions@users.noreply.github.com"
@@ -59,24 +61,24 @@ jobs:
           git commit -m "data: atualiza catalogo CVCRM"
 
           for tentativa in 1 2 3; do
-            echo "Tentativa $tentativa de sincronizacao..."
+            echo "Tentativa $tentativa de sincronizacao"
 
             git fetch origin main
 
             if ! git rebase origin/main; then
-              echo "Conflito durante o rebase. Intervencao necessaria."
+              echo "Conflito durante o rebase"
               git rebase --abort
               exit 1
             fi
 
             if git push origin HEAD:main; then
-              echo "Catalogo atualizado com sucesso!"
+              echo "Catalogo atualizado com sucesso"
               exit 0
             fi
 
-            echo "Push rejeitado. Tentando novamente..."
+            echo "Push rejeitado. Tentando novamente"
             sleep 5
           done
 
-          echo "Nao foi possivel publicar o catalogo apos 3 tentativas."
+          echo "Falha apos 3 tentativas"
           exit 1
