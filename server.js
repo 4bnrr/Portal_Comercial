@@ -58,6 +58,7 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ENTERPRISE_IMAGE_DIR = path.join(__dirname, 'public', 'assets', 'empreendimentos');
 const STATIC_BOOTSTRAP_FILE = path.join(__dirname, 'public', 'data', 'bootstrap.json');
 const MAX_HISTORY = 150;
+const AZURE_PRICE_TABLE_ID = 1484;
 const VERCEL_CATALOG_BLOB_PATH = process.env.VERCEL_CATALOG_BLOB_PATH || 'estacao1/catalog.json';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -796,6 +797,8 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
     const isVertex = normKey(enterprise.name).includes('vertexgetulio');
     const isVertexFraga = String(enterprise.id) === '123'
       || normKey(enterprise.name).includes('residencialvertexfragamaia');
+    const isAzure = String(enterprise.id) === '124'
+      || normKey(enterprise.name).includes('azurefragamaia');
     const endpoint = `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/detalhada`;
     setProgress({
       phase: 'fetching-appraisals',
@@ -822,7 +825,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       // sempre consultamos a lista e priorizamos a tabela ativa de vigência mais recente.
       // No Vertex, publicamos apenas tabelas aprovadas. O estado AP do painel é
       // retornado pela API v1 como aprovado = S.
-      if (enterprise.hasAvailable) {
+      // O Azure usa a própria tabela 1484 como fonte de disponibilidade. Por
+      // isso ela deve ser consultada mesmo que /unidades ainda não marque estoque.
+      if (enterprise.hasAvailable || isAzure) {
         const tableList = await cvGetConventional(
           `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco`,
           isVertex ? { aprovado: 'S' } : {}
@@ -847,11 +852,19 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         const fragaCompleteTables = isVertexFraga
           ? tables.filter(isVertexFragaCompletePriceTable)
           : [];
-        selectedTables = fragaCompleteTables.length
-          ? fragaCompleteTables.slice(0, 1)
-          : (isVertex && activeCurrentMonthTables.length
-              ? activeCurrentMonthTables
-              : tables.slice(0, 1));
+        const azureTable = isAzure
+          ? listedTables.find(table => priceTableId(table) === AZURE_PRICE_TABLE_ID)
+          : null;
+        selectedTables = isAzure
+          ? [azureTable || {
+              idtabela: AZURE_PRICE_TABLE_ID,
+              nome: 'AZURE FRAGA MAIA - TABELA ATIVA',
+            }]
+          : (fragaCompleteTables.length
+              ? fragaCompleteTables.slice(0, 1)
+              : (isVertex && activeCurrentMonthTables.length
+                  ? activeCurrentMonthTables
+                  : tables.slice(0, 1)));
         if (selectedTables.length) {
           const selectedPayloads = [];
           const combinedDashboard = new Map();
@@ -1213,10 +1226,13 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
   // /unidades/situacao mantém registros históricos e estava ocultando unidades
   // Padrão e Com varanda que voltaram a ficar disponíveis.
   const floorGroupedVertexRow = isFloorGroupedVertexUnit(baseRow);
+  const azureTableDriven = isAzureFragaMaiaUnit(baseRow) && preserveBaseIdentity;
   const vertexAvailable = floorGroupedVertexRow
     && intValue(pick(baseRow, ['situacao_para_venda','situacaoparavenda'])) === 1;
-  const resolvedStatus = floorGroupedVertexRow
-    ? (vertexAvailable ? 'disponivel' : 'indisponivel')
+  const resolvedStatus = azureTableDriven
+    ? (dashboardRow ? 'disponivel' : 'indisponivel')
+    : floorGroupedVertexRow
+      ? (vertexAvailable ? 'disponivel' : 'indisponivel')
     : (hasSituationRow && situationStatus !== 'indisponivel' ? situationStatus : baseStatus);
   const statusSource = floorGroupedVertexRow
     ? baseRow

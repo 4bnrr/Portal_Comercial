@@ -9,6 +9,7 @@ const acqua={id:'acqua',name:'Acqua América — sem varanda',remunerationType:'
 const configuredRules=JSON.parse(await readFile(new URL('./data/payment-plan-rules.json',import.meta.url),'utf8'));
 const publishedCatalog=JSON.parse(await readFile(new URL('./public/data/bootstrap.json',import.meta.url),'utf8'));
 const portalApp=await readFile(new URL('./public/app.js',import.meta.url),'utf8');
+const serverSource=await readFile(new URL('./server.js',import.meta.url),'utf8');
 
 const s=calculatePaymentPlan(baseInput,standard);
 assert.equal(s.maxPlanCapacity,27000);
@@ -50,16 +51,10 @@ const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(uni
 assert.ok(availableFragaUnits.length>0,'O catálogo deve preservar as unidades do Vertex Fraga Maia para a flag da Vercel.');
 const availableAzureUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='124'&&unit.status==='disponivel');
 assert.ok(availableAzureUnits.length>0,'O catálogo deve publicar as unidades disponíveis do Azure Fraga Maia.');
-assert.equal(availableAzureUnits.length,403,'O Azure deve publicar as 403 unidades ativas do relatório comercial.');
 assert.equal(
   Math.min(...availableAzureUnits.filter(unit=>Number(unit.price)>0).map(unit=>Number(unit.price))),
-  159990,
-  'O Azure Fraga Maia deve ser publicado a partir de R$ 159.990,00.'
-);
-assert.equal(
   publishedCatalog.catalog.enterprises.find(enterprise=>String(enterprise.id)==='124')?.lowestPrice,
-  159990,
-  'O cartão do Azure Fraga Maia deve exibir o menor preço publicado.'
+  'O cartão do Azure deve acompanhar dinamicamente o menor preço presente na tabela 1484.'
 );
 assert.ok(
   availableAzureUnits.every(unit=>{
@@ -73,26 +68,8 @@ assert.ok(
   }),
   'Cada unidade disponível do Azure deve usar o andar derivado do número, nunca o bloco.'
 );
-assert.deepEqual(
-  [...new Set(availableAzureUnits.map(unit=>unit.floor))].sort((a,b)=>a-b),
-  [0,1,2,3,4,5,6,7,8,9,10,11,12],
-  'O Azure deve disponibilizar tipologias do térreo ao 12º andar.'
-);
-const azureMinimumByFloor=new Map();
-for(const unit of availableAzureUnits){
-  const current=azureMinimumByFloor.get(unit.floor);
-  if(current===undefined||Number(unit.price)<current)azureMinimumByFloor.set(unit.floor,Number(unit.price));
-}
-assert.deepEqual(
-  [...azureMinimumByFloor.entries()].sort((a,b)=>a[0]-b[0]).map(([,price])=>price),
-  [159990,184990,190990,198990,205990,207990,208990,209990,210990,211990,212990,213990,214990],
-  'Os menores valores do Azure por andar devem coincidir com o relatório comercial.'
-);
-assert.equal(
-  publishedCatalog.catalog.enterprises.find(enterprise=>String(enterprise.id)==='124')?.unidades_disponiveis,
-  403,
-  'O cartão do Azure deve refletir as 403 unidades ativas do relatório.'
-);
+assert.match(serverSource,/AZURE_PRICE_TABLE_ID\s*=\s*1484/,'O Azure deve consultar exclusivamente a tabela 1484 do CV.');
+assert.match(serverSource,/azureTableDriven[\s\S]*dashboardRow \? 'disponivel' : 'indisponivel'/,'A presença na tabela 1484 deve controlar a disponibilidade do Azure.');
 assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
@@ -113,4 +90,4 @@ console.log('OK — Acqua América:', {comissao:q.realEstateCommission, coordena
 console.log('OK — Vertex Getúlio:', {limite:vertex.maxPlanCapacity, imobiliaria:vertex.realEstateCommission, construtora:vertex.builderRisk, recursoProprio:vertex.ownResourcesMinimum});
 console.log('OK — Avaliações do Vertex:', {unidades:availableVertexUnits.length, comAvaliacao:availableVertexUnits.filter(unit=>Number(unit.appraisal)>0).length});
 console.log('OK — Vertex Fraga Maia preservado e controlado pela flag da Vercel.');
-console.log('OK — Azure Fraga Maia a partir de R$ 159.990,00.');
+console.log('OK — Azure Fraga Maia parametrizado pela tabela CV 1484.');

@@ -92,76 +92,7 @@ function preserveRuntimeFlagEnterprises(primary, candidates) {
   return { ...primary, enterprises, units };
 }
 
-function applyAzureActiveTable(primary, table) {
-  if (!table || !Array.isArray(table.units) || !table.units.length) return primary;
-  const enterpriseId = String(table.enterpriseId || '124');
-  const enterpriseName = table.enterpriseName || 'Azure Fraga Maia';
-  const azureUnits = table.units
-    .filter(unit => unit.active !== false && Number(unit.price) > 0)
-    .map(unit => ({
-      id: `azure-table-${unit.block}-${unit.unitNumber}`,
-      internalId: `AFM.ACTIVE.${unit.block}.${unit.unitNumber}`,
-      enterpriseId,
-      enterpriseInternalId: 'AFM.01.1',
-      enterpriseName,
-      code: `AFM.${unit.block}.${unit.unitNumber}`,
-      developmentType: 'Vertical - Apartamento',
-      typology: unit.floorLabel,
-      commercialType: '',
-      stage: 'ETAPA 01',
-      bedrooms: 2,
-      suites: null,
-      tower: `BLOCO ${String(unit.block).padStart(2, '0')}`,
-      floor: Number(unit.floor),
-      area: Number(unit.area),
-      parkingSpaces: null,
-      price: Number(unit.price),
-      appraisal: Number(unit.appraisal),
-      status: 'disponivel',
-      statusReason: '',
-      tableName: table.tableName,
-      hasSituation: true,
-      hasPrice: true,
-      updatedAt: table.reportedAt,
-      sourceCommercialType: unit.commercialType,
-      position: unit.position,
-    }));
-  if (!azureUnits.length) return primary;
-
-  const lowestPrice = Math.min(...azureUnits.map(unit => unit.price));
-  const enterprises = [...(primary.enterprises || [])];
-  const currentIndex = enterprises.findIndex(enterprise => String(enterprise.id) === enterpriseId);
-  const current = currentIndex >= 0 ? enterprises[currentIndex] : {};
-  const totalUnits = Number(current.totalUnits) > 0 ? Number(current.totalUnits) : azureUnits.length;
-  const azureEnterprise = {
-    ...current,
-    id: enterpriseId,
-    name: enterpriseName,
-    type: current.type || 'Vertical - Apartamento',
-    totalUnits,
-    availableUnits: azureUnits.length,
-    unidades_disponiveis: azureUnits.length,
-    blockedUnits: Math.max(0, totalUnits - azureUnits.length),
-    lowestPrice,
-  };
-  if (currentIndex >= 0) enterprises[currentIndex] = azureEnterprise;
-  else enterprises.push(azureEnterprise);
-
-  return {
-    ...primary,
-    enterprises,
-    units: [
-      ...(primary.units || []).filter(unit => String(unit.enterpriseId) !== enterpriseId),
-      ...azureUnits,
-    ],
-  };
-}
-
-const azureActiveTable = readJson('azure-active-table.json', null);
-const sourceCatalog = applyAzureActiveTable(
-  preserveRuntimeFlagEnterprises(baseSourceCatalog, catalogCandidates),
-  azureActiveTable,
-);
+const sourceCatalog = preserveRuntimeFlagEnterprises(baseSourceCatalog, catalogCandidates);
 
 function appraisalFallbacks(catalogs) {
   const byUnit = new Map();
