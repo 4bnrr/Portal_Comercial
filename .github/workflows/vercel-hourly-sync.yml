@@ -2,7 +2,8 @@ name: Sincronizar CVCRM na Vercel
 
 on:
   schedule:
-    - cron: "17 */4 * * *"
+    # Executa aos minutos 17 e 47 de cada hora, evitando o pico do minuto zero.
+    - cron: "17,47 * * * *"
   workflow_dispatch:
 
 permissions:
