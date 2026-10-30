@@ -10,12 +10,17 @@ assert.deepEqual(
 
 assert.deepEqual(
   decideWatchdogAction([{ id: 2, status: 'completed', conclusion: 'success', updated_at: '2026-10-13T16:32:00Z' }], now),
-  { action: 'skip', reason: 'recent-success', runId: 2, ageMinutes: 15 },
+  { action: 'dispatch', reason: 'stale-success', runId: 2, ageMinutes: 15 },
 );
 
 assert.deepEqual(
   decideWatchdogAction([{ id: 3, status: 'completed', conclusion: 'success', updated_at: '2026-10-13T16:30:00Z' }], now),
   { action: 'dispatch', reason: 'stale-success', runId: 3, ageMinutes: 17 },
+);
+
+assert.deepEqual(
+  decideWatchdogAction([{ id: 4, status: 'completed', conclusion: 'success', updated_at: '2026-10-13T16:43:00Z' }], now),
+  { action: 'skip', reason: 'recent-success', runId: 4, ageMinutes: 4 },
 );
 
 assert.deepEqual(

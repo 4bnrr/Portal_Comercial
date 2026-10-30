@@ -29,4 +29,4 @@ Nenhum desses valores deve ser salvo no Git.
 5. Aplique a migration `20261013150000_schedule_cvcrm_watchdog.sql`.
 6. Faça uma chamada de teste e confirme o resultado no histórico do Cron.
 
-O cron usa UTC e roda nos minutos `07`, `22`, `37` e `52`, sempre cinco minutos depois do agendamento principal. Se a última execução bem-sucedida tiver mais de 16 minutos, o vigia dispara uma nova execução.
+O cron usa UTC e roda nos minutos `07`, `22`, `37` e `52`. Se a última execução bem-sucedida tiver mais de 5 minutos e não houver outra execução ativa, o vigia dispara uma nova execução. Essa pequena tolerância evita duplicidade logo após uma execução manual sem pular a próxima janela de 15 minutos.
