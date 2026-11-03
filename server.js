@@ -1043,6 +1043,18 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       const uniqueSourceRows = [...new Set(
         [...dashboard.values()].map(detail => detail?.sourceRow).filter(Boolean)
       )];
+      const azureTypeDiagnostic = isAzure ? {
+        columns: [...new Set(uniqueSourceRows.flatMap(row => Object.keys(row || {})))].slice(0, 80),
+        typeValues: [...new Set(uniqueSourceRows.flatMap(row =>
+          Object.entries(row || {})
+            .filter(([key]) => /tipologia|tipo.*unidade|unidade.*tipo/i.test(key))
+            .map(([, value]) => textValue(value))
+        ).filter(Boolean))].slice(0, 20),
+      } : null;
+      if (azureTypeDiagnostic) {
+        console.log(`[CVCRM][Azure] Colunas da tabela: ${azureTypeDiagnostic.columns.join(' | ')}`);
+        console.log(`[CVCRM][Azure] Valores de tipologia: ${azureTypeDiagnostic.typeValues.join(' | ') || 'não encontrados'}`);
+      }
       commercialTableUnits.set(String(enterprise.id), uniqueSourceRows.map(row => ({
         ...row,
         idempreendimento: String(enterprise.id),
@@ -1066,6 +1078,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         selectedCurrentMonth: selectedTables[0] ? isCurrentMonthPriceTable(selectedTables[0]) : false,
         selectedTableIds: selectedTables.map(priceTableId),
         selectedTableNames: selectedTables.map(table => textValue(pick(table, ['nome','tabela','nome_tabela','nometabela']))),
+        azureTypeDiagnostic,
         sample: payload,
       });
     } catch (error) {
