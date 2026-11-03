@@ -743,10 +743,10 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePre
           // estado histórico vindo do CVDW.
           status: deriveStatus(row),
           tableName,
-          // A listagem mensal identifica a modalidade comercial (Padrão ou
-          // Com varanda) em alguns retornos. Ela acompanha cada unidade para
-          // não depender apenas das colunas da linha detalhada.
-          sourceTable,
+          // A listagem e o cabeçalho detalhado da tabela mensal podem
+          // identificar a modalidade comercial (Padrão ou Com varanda). Os
+          // dois acompanham a unidade para não depender das colunas da linha.
+          sourceTable: { listing: sourceTable, details: node },
           // Mantém o número comercial (ex.: 1001, 1103, 1206) da tabela.
           // O CVDW /unidades usa outro identificador interno, que não representa
           // o andar do Azure.
