@@ -192,7 +192,7 @@ function varandaCategory(u){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toUpperCase();
 
-  if(enterprise.includes('AZURE FRAGA MAIA')) return String(u.commercialType||'').trim();
+  if(enterprise.includes('AZURE FRAGA MAIA')) return String(u.commercialType||'Não identificada').trim()||'Não identificada';
 
   // VERTEX/AZURE: cada pavimento é uma tipologia comercial independente.
   // No Azure, o CVCRM informa "BLOCO" como tipologia, mas o andar está no
@@ -328,7 +328,7 @@ function isAzureFragaMaia(r){
 }
 function vertexCommercialTypeLabel(r){
   if(isVertexFragaMaia(r)) return '';
-  if(isAzureFragaMaia(r)) return String(r?.commercialType||'').trim();
+  if(isAzureFragaMaia(r)) return String(r?.commercialType||'Não identificada').trim()||'Não identificada';
   return String(r?.commercialType||'Padrão').trim()||'Padrão';
 }
 function vertexCommercialDisplayName(enterpriseName,type){
@@ -370,7 +370,7 @@ function renderTable(){
     const r=entry.row;
     const detailId=`vertexTypologyDetails-${entryIndex}`;
     return `<tr class="vertex-summary-row"><td><b>${escapeHtml(entry.enterpriseName)}</b></td><td><b>${fmtBRL(r.price)}</b></td><td><b>${Number(r.appraisal)>0?fmtBRL(r.appraisal):'—'}</b></td><td><button class="btn secondary btn-small vertex-typology-toggle" type="button" data-target="${detailId}" aria-expanded="false">Simular ↓</button></td></tr>
-      <tr id="${detailId}" class="vertex-detail-row" hidden><td colspan="4"><div class="vertex-detail-panel"><div class="vertex-detail-heading"><b>${escapeHtml(entry.enterpriseName)}</b><small>Escolha um andar para simular</small></div><div class="vertex-detail-table-wrap"><table class="vertex-detail-table"><thead><tr><th>Tipologia</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${entry.rows.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item))}</b></td><td><b>${fmtBRL(item.price)}</b></td><td><b>${Number(item.appraisal)>0?fmtBRL(item.appraisal):'—'}</b></td><td><a class="btn secondary btn-small" href="#simulador">Simular →</a></td></tr>`).join('')}</tbody></table></div></div></td></tr>`;
+      <tr id="${detailId}" class="vertex-detail-row" hidden><td colspan="4"><div class="vertex-detail-panel"><div class="vertex-detail-heading"><b>${escapeHtml(entry.enterpriseName)}</b><small>Escolha uma tipologia para simular</small></div><div class="vertex-detail-table-wrap"><table class="vertex-detail-table"><thead><tr><th>Tipologia</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${entry.rows.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item))}</b></td><td><b>${fmtBRL(item.price)}</b></td><td><b>${Number(item.appraisal)>0?fmtBRL(item.appraisal):'—'}</b></td><td><a class="btn secondary btn-small" href="#simulador">Simular →</a></td></tr>`).join('')}</tbody></table></div></div></td></tr>`;
   }).join('');
   area.innerHTML=`<div class="price-table-head"><p class="meta"><b>${visibleEntries.length.toLocaleString('pt-BR')}</b> opções comerciais resumidas</p><span class="price-table-caption">Menores valores disponíveis</span></div>${visibleEntries.length?`<div class="table-wrap table-wrap-refined"><table class="data-table price-table"><thead><tr><th>Empreendimento</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${body}</tbody></table></div>`:'<div class="empty">Nenhuma opção disponível encontrada.</div>'}`;
   document.querySelectorAll('.vertex-typology-toggle').forEach(button=>button.addEventListener('click',e=>{
