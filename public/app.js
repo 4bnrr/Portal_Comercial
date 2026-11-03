@@ -192,6 +192,8 @@ function varandaCategory(u){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toUpperCase();
 
+  if(enterprise.includes('AZURE FRAGA MAIA')) return String(u.commercialType||'').trim();
+
   // VERTEX/AZURE: cada pavimento é uma tipologia comercial independente.
   // No Azure, o CVCRM informa "BLOCO" como tipologia, mas o andar está no
   // número final do código (0–99 térreo, 100–199 primeiro andar etc.).
@@ -325,7 +327,8 @@ function isAzureFragaMaia(r){
   return normalizeEnterpriseName(typeof r==='string'?r:r?.enterpriseName).includes('azurefragamaia');
 }
 function vertexCommercialTypeLabel(r){
-  if(isVertexFragaMaia(r)||isAzureFragaMaia(r)) return '';
+  if(isVertexFragaMaia(r)) return '';
+  if(isAzureFragaMaia(r)) return String(r?.commercialType||'').trim();
   return String(r?.commercialType||'Padrão').trim()||'Padrão';
 }
 function vertexCommercialDisplayName(enterpriseName,type){
