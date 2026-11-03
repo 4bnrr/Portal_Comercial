@@ -614,6 +614,86 @@ async function cvGetConventional(endpoint, params = {}) {
   throw new Error('CVCRM: número máximo de tentativas excedido na tabela detalhada.');
 }
 
+function decodeHtmlCell(value) {
+  return String(value || '')
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&([a-z]+);/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// O endpoint detalhado do CVCRM pode devolver um link temporário para o
+// relatório HTML. Esse relatório contém colunas, como TIPOLOGIA, que não
+// aparecem no JSON resumido usado para preço e disponibilidade.
+function parsePriceTableHtml(html) {
+  const rows = [];
+  const tableMatches = String(html || '').match(/<table\b[\s\S]*?<\/table>/gi) || [];
+  for (const table of tableMatches) {
+    const trMatches = table.match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+    let headers = null;
+    for (const tr of trMatches) {
+      const cells = [...tr.matchAll(/<(th|td)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
+        .map(match => decodeHtmlCell(match[2]));
+      if (!cells.length) continue;
+      const isHeader = /<th\b/i.test(tr);
+      if (isHeader) {
+        headers = cells;
+        continue;
+      }
+      if (!headers || headers.length !== cells.length) continue;
+      const row = {};
+      headers.forEach((header, index) => { if (header) row[header] = cells[index] || ''; });
+      if (detailedUnitKeys(row).length) rows.push(row);
+    }
+  }
+  return rows;
+}
+
+function priceTableExportLinks(payload) {
+  const links = [];
+  const walk = (node, depth = 0) => {
+    if (!node || depth > 5) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item, depth + 1);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      if (normKey(key) === 'links' && Array.isArray(value)) {
+        for (const link of value) if (typeof link === 'string') links.push(link);
+      } else if (value && typeof value === 'object') walk(value, depth + 1);
+    }
+  };
+  walk(payload);
+  return [...new Set(links)];
+}
+
+async function enrichPriceTableWithHtml(payload, table) {
+  const links = priceTableExportLinks(payload);
+  if (!links.length) return payload;
+  for (const rawLink of links) {
+    try {
+      const url = new URL(rawLink);
+      if (!/(^|\.)cvcrm\.com\.br$/i.test(url.hostname)) continue;
+      const response = await fetch(url, { headers: { Accept: 'text/html' }, signal: AbortSignal.timeout(90000) });
+      if (!response.ok) continue;
+      const rows = parsePriceTableHtml(await response.text());
+      if (rows.length) {
+        console.log(`[CVCRM] Relatório detalhado da tabela ${priceTableId(table)}: ${rows.length} unidades com colunas completas.`);
+        return [payload, { tabela: textValue(pick(table, ['nome', 'tabela', 'nome_tabela'])), dados: rows }];
+      }
+    } catch (error) {
+      console.warn(`[CVCRM] Não foi possível ler o relatório detalhado da tabela ${priceTableId(table)}: ${error.message}`);
+    }
+  }
+  return payload;
+}
+
 function directAppraisalValue(obj) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
   // A coluna usada no CVCRM da Estação 1 é "VALOR DO IMÓVEL (1x)".
@@ -910,8 +990,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
                 ...(isVertex ? { painel: 'corretor' } : {}),
               }
             );
-            selectedPayloads.push(tablePayload);
-            for (const [key, value] of collectCommercialDashboardRows(tablePayload, true, null, table)) {
+            const enrichedTablePayload = await enrichPriceTableWithHtml(tablePayload, table);
+            selectedPayloads.push(enrichedTablePayload);
+            for (const [key, value] of collectCommercialDashboardRows(enrichedTablePayload, true, null, table)) {
               if (!combinedDashboard.has(key)) combinedDashboard.set(key, value);
             }
           }
