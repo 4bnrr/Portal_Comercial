@@ -1513,6 +1513,17 @@ function azureCommercialType(...rows) {
     if (/semvaranda|padrao/.test(value)) return 'Padrão';
     if (/comvaranda|varanda/.test(value) && !/semvaranda/.test(value)) return 'Com varanda';
   }
+  // Enquanto a rota JSON do CVCRM não expõe a coluna TIPOLOGIA, mantemos a
+  // equivalência confirmada na tabela comercial vigente do Azure: 40,37 m²
+  // é 2/4 - VARANDA e 39,13 m² é 2/4 - PADRAO. A Tipologia explícita acima
+  // sempre tem prioridade e substitui este fallback assim que estiver presente.
+  for (const row of rows) {
+    const area = numberValue(pick(row, [
+      'area_privativa', 'areaprivativa', 'area_privativa_total', 'area_total', 'area'
+    ]));
+    if (area !== null && Math.abs(area - 40.37) < 0.02) return 'Com varanda';
+    if (area !== null && Math.abs(area - 39.13) < 0.02) return 'Padrão';
+  }
   return '';
 }
 function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, dashboardRow = null, preserveBaseIdentity = false) {

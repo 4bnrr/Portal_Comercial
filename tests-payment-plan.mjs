@@ -79,6 +79,7 @@ assert.match(serverSource,/aprovado:\s*'S'/,'As consultas de tabelas devem solic
 assert.match(serverSource,/sourceRow:\s*row/,'A tabela mensal deve preservar o número comercial da unidade para calcular o andar.');
 assert.match(serverSource,/const floorSource = azureTableDriven[\s\S]*dashboardRow\.sourceRow[\s\S]*: baseRow/,'O Azure deve calcular o andar pelo número comercial da tabela, não pelo ID interno do CVDW.');
 assert.match(serverSource,/collectValues\(row\)[\s\S]*comvaranda\|varanda/,'O Azure deve identificar Padrão e Com varanda a partir dos dados completos da tabela de preços.');
+assert.match(serverSource,/area - 40\.37[\s\S]*Com varanda[\s\S]*area - 39\.13[\s\S]*Padrão/,'O Azure deve usar as áreas confirmadas na tabela como fallback de Tipologia.');
 assert.match(serverSource,/sourceTable,[\s\S]*enrichPriceTableWithHtml\(tablePayload, table\)[\s\S]*collectCommercialDashboardRows\(enrichedTablePayload, true, null, table\)/,'O Azure deve preservar a Tipologia do relatório detalhado da tabela de preços.');
 assert.match(serverSource,/fetchPriceTableHtmlReport\(tableEndpoint, table\)/,'O Azure deve consultar o relatório HTML que contém a coluna Tipologia.');
 assert.match(serverSource,/a_partir_data_referencia:\s*incrementalSince/,'As consultas frequentes devem solicitar apenas registros alterados desde a última sincronização.');
