@@ -58,7 +58,6 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const ENTERPRISE_IMAGE_DIR = path.join(__dirname, 'public', 'assets', 'empreendimentos');
 const STATIC_BOOTSTRAP_FILE = path.join(__dirname, 'public', 'data', 'bootstrap.json');
 const MAX_HISTORY = 150;
-const AZURE_PRICE_TABLE_ID = 1484;
 const VERCEL_CATALOG_BLOB_PATH = process.env.VERCEL_CATALOG_BLOB_PATH || 'estacao1/catalog.json';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -739,9 +738,10 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePre
       for (const row of rows) {
         const detail = {
           price: tableSeriesValue(row, /valordevenda/) ?? extractPrice(row),
-          // Tabelas antigas são usadas apenas como fonte de preço. A situação
-          // atual continua vindo de /unidades/situacao para não reabrir vendas.
-          status: allowAnyTable ? null : deriveStatus(row),
+          // A tabela aprovada é a fonte comercial de disponibilidade. Unidades
+          // vendidas deixam de aparecer nela e não podem ser reabertas por um
+          // estado histórico vindo do CVDW.
+          status: deriveStatus(row),
           tableName,
           // Mantém o número comercial (ex.: 1001, 1103, 1206) da tabela.
           // O CVDW /unidades usa outro identificador interno, que não representa
@@ -796,7 +796,12 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
     const id = enterpriseKey(row);
     const name = enterpriseName(row);
     if (!id || hiddenEnterpriseNames.has(normKey(name))) continue;
-    if (!enterprises.has(String(id))) enterprises.set(String(id), { id: String(id), name, hasAvailable: false });
+    if (!enterprises.has(String(id))) enterprises.set(String(id), {
+      id: String(id),
+      name,
+      type: textValue(pick(row, ['tipo_empreendimento'])),
+      hasAvailable: false,
+    });
     const situation = lookupUnit(situationIndex, row);
     const situationStatus = Object.keys(situation).length ? deriveStatus(situation) : null;
     const status = isFloorGroupedVertexUnit(row)
@@ -807,6 +812,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
 
   const perEnterprise = new Map();
   const commercialDashboards = new Map();
+  const commercialTableUnits = new Map();
   const diagnostics = [];
   let position = 0;
   for (const enterprise of [...enterprises.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))) {
@@ -829,7 +835,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
     try {
       const genericPayload = await cvGetConventional(endpoint, {
         tabelasemjson: 'true',
-        ...(isVertex ? { aprovado: 'S' } : {}),
+        aprovado: 'S',
       });
       let appraisalPayload = genericPayload;
       let payload = genericPayload;
@@ -842,26 +848,37 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
       // sempre consultamos a lista e priorizamos a tabela ativa de vigência mais recente.
       // No Vertex, publicamos apenas tabelas aprovadas. O estado AP do painel é
       // retornado pela API v1 como aprovado = S.
-      // O Azure usa a própria tabela 1484 como fonte de disponibilidade. Por
-      // isso ela deve ser consultada mesmo que /unidades ainda não marque estoque.
-      if (enterprise.hasAvailable || isAzure) {
+      // As tabelas aprovadas são a fonte comercial de disponibilidade. Por isso
+      // elas são consultadas mesmo que /unidades ainda não marque estoque.
+      {
         const tableList = await cvGetConventional(
           `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco`,
-          isVertex ? { aprovado: 'S' } : {}
+          // O CVCRM omite algumas tabelas AP (como a 1498) quando este filtro é
+          // enviado na listagem. Lemos a lista e aplicamos isApprovedPriceTable
+          // localmente; a rota detalhada continua exigindo aprovado = S.
+          {}
         );
         const listedTables = (Array.isArray(tableList) ? tableList : recordArray(tableList))
           .filter(table => table && priceTableId(table));
-        const approvedTables = isVertex ? listedTables.filter(isApprovedPriceTable) : listedTables;
-        const activeTables = approvedTables.filter(isActivePanelRow);
-        const eligibleTables = activeTables.length ? activeTables : approvedTables;
+        const approvedTables = listedTables.filter(isApprovedPriceTable);
+        // A aprovação AP/S é suficiente para tornar a tabela elegível. O campo
+        // ativo_painel não pode ocultar uma tabela já aprovada pelo comercial.
+        const eligibleTables = approvedTables;
         const currentMonthTables = eligibleTables.filter(isCurrentMonthPriceTable);
-        const tables = (isVertex ? currentMonthTables : (currentMonthTables.length ? currentMonthTables : eligibleTables))
+        // Aprovada do mês é a primeira opção. Se o CVCRM devolver a vigência
+        // em um formato que não reconhecemos, usamos a aprovada mais recente
+        // em vez de ocultar o empreendimento ou herdar uma Dashboard antiga.
+        const tables = (currentMonthTables.length ? currentMonthTables : eligibleTables)
           .sort((a, b) => {
             const dateDifference = priceTableTimestamp(b) - priceTableTimestamp(a);
             if (dateDifference) return dateDifference;
             return priceTableId(b) - priceTableId(a);
           });
         const activeCurrentMonthTables = tables.filter(isCurrentMonthPriceTable);
+        const latestMonth = tables[0] ? priceTableMonthKey(tables[0]) : '';
+        const latestMonthTables = latestMonth
+          ? tables.filter(table => priceTableMonthKey(table) === latestMonth)
+          : tables.slice(0, 1);
         // O Vertex possui tabelas mensais complementares por grupo de blocos.
         // Lemos todas as aprovadas e ativas do mês para não
         // descartar os blocos 04 e 05
@@ -869,19 +886,13 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         const fragaCompleteTables = isVertexFraga
           ? tables.filter(isVertexFragaCompletePriceTable)
           : [];
-        const azureTable = isAzure
-          ? listedTables.find(table => priceTableId(table) === AZURE_PRICE_TABLE_ID)
-          : null;
         selectedTables = isAzure
-          ? [azureTable || {
-              idtabela: AZURE_PRICE_TABLE_ID,
-              nome: 'AZURE FRAGA MAIA - TABELA ATIVA',
-            }]
+          ? (activeCurrentMonthTables.length ? activeCurrentMonthTables.slice(0, 1) : latestMonthTables.slice(0, 1))
           : (fragaCompleteTables.length
               ? fragaCompleteTables.slice(0, 1)
               : (isVertex && activeCurrentMonthTables.length
                   ? activeCurrentMonthTables
-                  : tables.slice(0, 1)));
+                  : latestMonthTables));
         if (selectedTables.length) {
           const selectedPayloads = [];
           const combinedDashboard = new Map();
@@ -891,7 +902,8 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
               `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
               {
                 tabelasemjson: 'true',
-                ...(isVertex ? { aprovado: 'S', painel: 'corretor' } : {}),
+                aprovado: 'S',
+                ...(isVertex ? { painel: 'corretor' } : {}),
               }
             );
             selectedPayloads.push(tablePayload);
@@ -909,10 +921,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           appraisalPayload = [genericPayload, ...selectedPayloads];
           allowAnyTable = true;
           dashboard = combinedDashboard;
-        } else if (isVertex) {
-          // Sem tabela aprovada do mês, o Vertex não herda Dashboard antiga nem
-          // tabela pendente. As unidades voltam a aparecer quando o CVCRM expuser
-          // uma tabela do mês no estado AP/aprovado = S.
+        } else {
+          // Sem tabela aprovada, nenhum empreendimento herda Dashboard antiga,
+          // tabela pendente ou preço bruto do CVDW.
           payload = [];
           allowAnyTable = true;
           dashboard = new Map();
@@ -938,6 +949,16 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         Number(row.price) > 0 && (allowAnyTable || row.status === 'disponivel')
       );
       if (dashboardEligible) commercialDashboards.set(String(enterprise.id), dashboard);
+      const uniqueSourceRows = [...new Set(
+        [...dashboard.values()].map(detail => detail?.sourceRow).filter(Boolean)
+      )];
+      commercialTableUnits.set(String(enterprise.id), uniqueSourceRows.map(row => ({
+        ...row,
+        idempreendimento: String(enterprise.id),
+        empreendimento: enterprise.name,
+        tipo_empreendimento: enterprise.type,
+        ativo_painel: 'A',
+      })));
       diagnostics.push({
         enterpriseId: enterprise.id,
         enterpriseName: enterprise.name,
@@ -957,6 +978,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
         sample: payload,
       });
     } catch (error) {
+      // Uma falha na API nunca libera as linhas brutas do CVDW como substitutas
+      // de uma tabela aprovada. O catálogo anterior será preservado depois.
+      commercialTableUnits.set(String(enterprise.id), []);
       diagnostics.push({
         enterpriseId: enterprise.id,
         enterpriseName: enterprise.name,
@@ -970,7 +994,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
   // Guardamos a resposta detalhada para diagnóstico, mas limitamos cada payload a
   // uma serialização completa apenas nesta fonte auxiliar; o arquivo não é servido publicamente.
   try { writeJson(DETAILED_TABLE_RAW_FILE, { at: new Date().toISOString(), enterprises: diagnostics }); } catch {}
-  return { perEnterprise, commercialDashboards, diagnostics };
+  return { perEnterprise, commercialDashboards, commercialTableUnits, diagnostics };
 }
 
 function unitKey(row) {
@@ -1396,10 +1420,22 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     updatedAt: textValue(pick(statusSource, ['referencia_data','data_referencia','datareferencia','updated_at','atualizado_em']), new Date().toISOString()),
   };
 }
-function mergeData(unitsRows, situationRows = [], priceRows = [], appraisalByEnterprise = new Map(), commercialDashboards = new Map()) {
+function mergeData(
+  unitsRows,
+  situationRows = [],
+  priceRows = [],
+  appraisalByEnterprise = new Map(),
+  commercialDashboards = new Map(),
+  commercialTableUnits = new Map(),
+) {
   const situationIndex = latestByUnit(situationRows);
   const priceIndex = bestPriceByUnit(priceRows);
-  const allUnits = unitsRows.filter(isEnterprisePanelActive).map(row => {
+  const tableDrivenEnterpriseIds = new Set([...commercialTableUnits.keys()].map(String));
+  const sourceRows = [
+    ...unitsRows.filter(row => !tableDrivenEnterpriseIds.has(String(enterpriseKey(row)))),
+    ...[...commercialTableUnits.values()].flat(),
+  ];
+  const allUnits = sourceRows.filter(isEnterprisePanelActive).map(row => {
     const enterpriseId = String(enterpriseKey(row));
     const enterpriseAppraisals = appraisalByEnterprise.get(enterpriseId) || null;
     const enterpriseDashboard = commercialDashboards.get(enterpriseId) || null;
@@ -1567,7 +1603,12 @@ async function syncCvcrm(trigger = 'manual') {
   let unitsRows = [];
   let situationRows = [];
   let priceRows = [];
-  let appraisalData = { perEnterprise: new Map(), commercialDashboards: new Map(), diagnostics: [] };
+  let appraisalData = {
+    perEnterprise: new Map(),
+    commercialDashboards: new Map(),
+    commercialTableUnits: new Map(),
+    diagnostics: [],
+  };
   let merged = { units: [], allUnits: [], enterprises: [], allEnterprises: [] };
   let syncMode = 'full';
   let incrementalSince = null;
@@ -1641,12 +1682,23 @@ async function syncCvcrm(trigger = 'manual') {
       retryWaitSeconds: null,
     });
 
-    merged = mergeData(unitsRows, situationRows, priceRows, appraisalData.perEnterprise, appraisalData.commercialDashboards);
+    merged = mergeData(
+      unitsRows,
+      situationRows,
+      priceRows,
+      appraisalData.perEnterprise,
+      appraisalData.commercialDashboards,
+      appraisalData.commercialTableUnits,
+    );
     preservePreviousAppraisals(merged, previousCache);
     // Empreendimentos liberados recentemente não devem sumir da vitrine por uma
     // inconsistência temporária entre unidades, situações e tabelas de preço.
-    const requiredEnterpriseIds = new Set(['121', '122']);
-    for (const enterpriseId of requiredEnterpriseIds) {
+    const preservedEnterpriseIds = new Set([
+      '121',
+      '122',
+      ...appraisalData.diagnostics.filter(item => !item.ok).map(item => String(item.enterpriseId)),
+    ]);
+    for (const enterpriseId of preservedEnterpriseIds) {
       const staged = merged.enterprises.some(e => String(e.id) === enterpriseId);
       if (staged) continue;
       const previousEnterprise = (previousCache.enterprises || []).find(e => String(e.id) === enterpriseId);

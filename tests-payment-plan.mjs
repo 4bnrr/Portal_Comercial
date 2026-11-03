@@ -55,7 +55,7 @@ assert.ok(availableAzureUnits.length>0,'O catálogo deve publicar as unidades di
 assert.equal(
   Math.min(...availableAzureUnits.filter(unit=>Number(unit.price)>0).map(unit=>Number(unit.price))),
   publishedCatalog.catalog.enterprises.find(enterprise=>String(enterprise.id)==='124')?.lowestPrice,
-  'O cartão do Azure deve acompanhar dinamicamente o menor preço presente na tabela 1484.'
+  'O cartão do Azure deve acompanhar dinamicamente o menor preço presente na tabela mensal vigente.'
 );
 assert.ok(
   availableAzureUnits.every(unit=>{
@@ -69,15 +69,20 @@ assert.ok(
   }),
   'Cada unidade disponível do Azure deve usar o andar derivado do número, nunca o bloco.'
 );
-assert.match(serverSource,/AZURE_PRICE_TABLE_ID\s*=\s*1484/,'O Azure deve consultar exclusivamente a tabela 1484 do CV.');
-assert.match(serverSource,/azureTableDriven[\s\S]*dashboardRow \? 'disponivel' : 'indisponivel'/,'A presença na tabela 1484 deve controlar a disponibilidade do Azure.');
-assert.match(serverSource,/sourceRow:\s*row/,'A tabela 1484 deve preservar o número comercial da unidade para calcular o andar.');
+assert.doesNotMatch(serverSource,/AZURE_PRICE_TABLE_ID\s*=\s*1484/,'O Azure não pode ficar preso à tabela de outubro 1484.');
+assert.match(serverSource,/selectedTables = isAzure[\s\S]*activeCurrentMonthTables/,'O Azure deve priorizar automaticamente a tabela ativa do mês corrente.');
+assert.match(serverSource,/latestMonthTables/,'Tabelas complementares do mesmo mês devem ser processadas em conjunto.');
+assert.match(serverSource,/commercialTableUnits/,'Vertex e Azure devem publicar somente as unidades presentes na tabela mensal vigente.');
+assert.match(serverSource,/const approvedTables = listedTables\.filter\(isApprovedPriceTable\)/,'Somente tabelas aprovadas podem alimentar o catálogo comercial.');
+assert.match(serverSource,/const eligibleTables = approvedTables/,'Uma tabela aprovada não pode ser ocultada pelo estado ativo_painel.');
+assert.match(serverSource,/aprovado:\s*'S'/,'As consultas de tabelas devem solicitar explicitamente somente registros aprovados.');
+assert.match(serverSource,/sourceRow:\s*row/,'A tabela mensal deve preservar o número comercial da unidade para calcular o andar.');
 assert.match(serverSource,/const floorSource = azureTableDriven[\s\S]*dashboardRow\.sourceRow[\s\S]*: baseRow/,'O Azure deve calcular o andar pelo número comercial da tabela, não pelo ID interno do CVDW.');
 assert.match(serverSource,/a_partir_data_referencia:\s*incrementalSince/,'As consultas frequentes devem solicitar apenas registros alterados desde a última sincronização.');
 assert.match(serverSource,/Carga incremental falhou:[\s\S]*Executando carga completa/,'Uma falha incremental deve acionar automaticamente a carga completa.');
 assert.match(serverSource,/lastFullSuccess[\s\S]*CVDW_FULL_SYNC_INTERVAL_MS/,'A carga completa diária deve permanecer registrada no catálogo.');
 assert.match(syncWorkflow,/cron:\s*"2,17,32,47 \* \* \* \*"/,'O CVCRM deve ser consultado a cada 15 minutos.');
-assert.match(syncWorkflow,/CVDW_FULL_SYNC_INTERVAL_HOURS:\s*24/,'O workflow deve realizar uma carga completa a cada 24 horas.');
+assert.match(syncWorkflow,/CVDW_FULL_SYNC_INTERVAL_HOURS:\s*["']?24["']?/,'O workflow deve realizar uma carga completa a cada 24 horas.');
 assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
@@ -98,4 +103,4 @@ console.log('OK — Acqua América:', {comissao:q.realEstateCommission, coordena
 console.log('OK — Vertex Getúlio:', {limite:vertex.maxPlanCapacity, imobiliaria:vertex.realEstateCommission, construtora:vertex.builderRisk, recursoProprio:vertex.ownResourcesMinimum});
 console.log('OK — Avaliações do Vertex:', {unidades:availableVertexUnits.length, comAvaliacao:availableVertexUnits.filter(unit=>Number(unit.appraisal)>0).length});
 console.log('OK — Vertex Fraga Maia preservado e controlado pela flag da Vercel.');
-console.log('OK — Azure Fraga Maia parametrizado pela tabela CV 1484.');
+console.log('OK — Azure Fraga Maia parametrizado dinamicamente pela tabela mensal vigente.');
