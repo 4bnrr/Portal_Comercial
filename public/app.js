@@ -280,7 +280,9 @@ function enterpriseVarandaMinimumRows(){
 
     if(!g.overall || Number(u.price)<Number(g.overall.price)) g.overall=u;
 
-    const cat=varandaCategory(u);
+    // Azure Fraga Maia segue a estrutura do Vertex: primeiro agrupamos por
+    // Padrão/Com varanda e, dentro de cada grupo, preservamos cada andar.
+    const cat=isAzureFragaMaia(u)?azureFloorLabel(u):varandaCategory(u);
     if(cat){
       const current=g.categories.get(cat);
       if(!current || Number(u.price)<Number(current.price)){
