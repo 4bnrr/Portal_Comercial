@@ -700,6 +700,35 @@ async function enrichPriceTableWithHtml(payload, table) {
   return payload;
 }
 
+async function fetchPriceTableHtmlReport(endpoint, table) {
+  const url = new URL(endpoint, baseUrl());
+  url.searchParams.set('aprovado', 'S');
+  url.searchParams.set('tabelasemjson', 'false');
+  const { response, bodyText } = await fetchCvcrmWithSingleRetry(
+    url,
+    () => ({
+      method: 'GET',
+      headers: {
+        email: process.env.CVCRM_EMAIL,
+        token: process.env.CVCRM_TOKEN,
+        Accept: 'text/html,application/json;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(90000),
+    }),
+    endpoint,
+    'Falha de rede ao consultar relatório HTML da tabela do CVCRM',
+  );
+  if (!response.ok) throw new Error(`CVCRM ${response.status}: não foi possível obter o relatório detalhado.`);
+  const directRows = parsePriceTableHtml(bodyText);
+  if (directRows.length) {
+    console.log(`[CVCRM] Relatório HTML direto da tabela ${priceTableId(table)}: ${directRows.length} unidades.`);
+    return { tabela: textValue(pick(table, ['nome', 'tabela', 'nome_tabela'])), dados: directRows };
+  }
+  let payload;
+  try { payload = JSON.parse(bodyText); } catch { return {}; }
+  return enrichPriceTableWithHtml(payload, table);
+}
+
 function directAppraisalValue(obj) {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
   // A coluna usada no CVCRM da Estação 1 é "VALOR DO IMÓVEL (1x)".
@@ -1004,13 +1033,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
             // coluna TIPOLOGIA. Para o Azure, consultamos também o relatório
             // completo (sem tabelasemjson) e cruzamos pelo código da unidade.
             if (isAzure) {
-              const reportPayload = await cvGetConventional(tableEndpoint, {
-                aprovado: 'S',
-                // A base da Estação 1 assume JSON quando o parâmetro é omitido.
-                // "false" força o link do relatório HTML que contém TIPOLOGIA.
-                tabelasemjson: 'false',
-              });
-              const enrichedReport = await enrichPriceTableWithHtml(reportPayload, table);
+              const enrichedReport = await fetchPriceTableHtmlReport(tableEndpoint, table);
               const reportRows = collectCommercialDashboardRows(enrichedReport, true, null, table);
               for (const [key, reportDetail] of reportRows) {
                 const current = tableRows.get(key);
