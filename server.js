@@ -722,7 +722,7 @@ function tableSeriesValue(row, pattern) {
   return item ? numberValue(item.valor) : null;
 }
 
-function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePredicate = null) {
+function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePredicate = null, sourceTable = null) {
   const index = new Map();
   const walk = (node, depth = 0) => {
     if (!node || typeof node !== 'object' || depth > 12) return;
@@ -743,6 +743,10 @@ function collectCommercialDashboardRows(payload, allowAnyTable = false, tablePre
           // estado histórico vindo do CVDW.
           status: deriveStatus(row),
           tableName,
+          // A listagem mensal identifica a modalidade comercial (Padrão ou
+          // Com varanda) em alguns retornos. Ela acompanha cada unidade para
+          // não depender apenas das colunas da linha detalhada.
+          sourceTable,
           // Mantém o número comercial (ex.: 1001, 1103, 1206) da tabela.
           // O CVDW /unidades usa outro identificador interno, que não representa
           // o andar do Azure.
@@ -907,7 +911,7 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
               }
             );
             selectedPayloads.push(tablePayload);
-            for (const [key, value] of collectCommercialDashboardRows(tablePayload, true)) {
+            for (const [key, value] of collectCommercialDashboardRows(tablePayload, true, null, table)) {
               if (!combinedDashboard.has(key)) combinedDashboard.set(key, value);
             }
           }
@@ -1348,7 +1352,17 @@ function azureCommercialType(...rows) {
   // sem depender de uma coluna específica, mas exigindo indicação explícita.
   for (const row of rows) {
     if (!row) continue;
-    const value = normKey(Object.values(row).filter(item => item !== null && item !== undefined).join(' '));
+    const values = [];
+    const collectValues = (item, depth = 0) => {
+      if (item === null || item === undefined || depth > 4) return;
+      if (typeof item === 'object') {
+        for (const child of Object.values(item)) collectValues(child, depth + 1);
+        return;
+      }
+      values.push(String(item));
+    };
+    collectValues(row);
+    const value = normKey(values.join(' '));
     if (/semvaranda|padrao/.test(value)) return 'Padrão';
     if (/comvaranda|varanda/.test(value) && !/semvaranda/.test(value)) return 'Com varanda';
   }
@@ -1408,7 +1422,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     typology: floorGroupedVertexRow ? vertexFloorLabel(floorSource) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
     // Azure: separar somente quando a tipologia estiver explicitamente identificada.
     commercialType: isAzureFragaMaiaUnit(baseRow)
-      ? azureCommercialType(dashboardRow?.sourceRow, {tipologia: dashboardRow?.tableName}, baseRow)
+      ? azureCommercialType(dashboardRow?.sourceRow, dashboardRow?.sourceTable, {tipologia: dashboardRow?.tableName}, baseRow)
       : floorGroupedVertexRow && !isVertexFragaMaiaUnit(baseRow)
         ? vertexCommercialType(baseRow)
         : '',
