@@ -1343,24 +1343,17 @@ function vertexCommercialType(row) {
   return raw.includes('varanda') && !raw.includes('semvaranda') ? 'Com varanda' : 'Padrão';
 }
 function azureCommercialType(...rows) {
-  // Use apenas indicações explícitas na tabela ou no cadastro da unidade.
-  const fields = ['tipo_unidade','tipo_unidade_nome','tipounidade','nome_tipologia',
-    'tipologia_nome','tipologia','descricao_tipologia','planta','modelo',
-    'descricao','caracteristicas','caracteristica','nome_tabela','tabela'];
+  // Não deduzir "Padrão" da ausência da palavra varanda: exigir indicação explícita.
   for (const row of rows) {
-    if (!row || typeof row !== 'object') continue;
-    const candidates = [row, row.sourceRow].filter(Boolean);
-    for (const candidate of candidates) {
-      for (const field of fields) {
-        const value = normKey(pick(candidate, [field]));
-        if (/semvaranda|padrao/.test(value)) return 'Padrão';
-        if (/comvaranda/.test(value)) return 'Com varanda';
-      }
+    if (!row) continue;
+    for (const field of ['tipo_unidade','tipo_unidade_nome','tipounidade','nome_tipologia','tipologia_nome','tipologia','descricao_tipologia','planta','modelo','descricao']) {
+      const value = normKey(pick(row, [field]));
+      if (/semvaranda|padrao/.test(value)) return 'Padrão';
+      if (/comvaranda|varanda/.test(value) && !/semvaranda/.test(value)) return 'Com varanda';
     }
   }
   return '';
 }
-
 function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, dashboardRow = null, preserveBaseIdentity = false) {
   const combined = { ...baseRow, ...situationRow, ...priceRow };
   // Quando o CVCRM publica uma Dashboard comercial para o empreendimento,
@@ -1415,7 +1408,7 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     typology: floorGroupedVertexRow ? vertexFloorLabel(floorSource) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
     // Azure: separar somente quando a tipologia estiver explicitamente identificada.
     commercialType: isAzureFragaMaiaUnit(baseRow)
-      ? azureCommercialType(dashboardRow?.sourceRow, { nome_tabela: dashboardRow?.tableName }, baseRow)
+      ? azureCommercialType(dashboardRow?.sourceRow, {tipologia: dashboardRow?.tableName}, baseRow)
       : floorGroupedVertexRow && !isVertexFragaMaiaUnit(baseRow)
         ? vertexCommercialType(baseRow)
         : '',
