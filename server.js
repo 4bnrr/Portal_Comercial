@@ -1004,7 +1004,12 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
             // coluna TIPOLOGIA. Para o Azure, consultamos também o relatório
             // completo (sem tabelasemjson) e cruzamos pelo código da unidade.
             if (isAzure) {
-              const reportPayload = await cvGetConventional(tableEndpoint, { aprovado: 'S' });
+              const reportPayload = await cvGetConventional(tableEndpoint, {
+                aprovado: 'S',
+                // A base da Estação 1 assume JSON quando o parâmetro é omitido.
+                // "false" força o link do relatório HTML que contém TIPOLOGIA.
+                tabelasemjson: 'false',
+              });
               const enrichedReport = await enrichPriceTableWithHtml(reportPayload, table);
               const reportRows = collectCommercialDashboardRows(enrichedReport, true, null, table);
               for (const [key, reportDetail] of reportRows) {
