@@ -988,8 +988,9 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
           const combinedDashboard = new Map();
           for (const table of selectedTables) {
             const tableId = priceTableId(table);
+            const tableEndpoint = `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`;
             const tablePayload = await cvGetConventional(
-              `/api/v1/cadastros/empreendimentos/${encodeURIComponent(enterprise.id)}/tabelasdepreco/${encodeURIComponent(tableId)}/detalhada`,
+              tableEndpoint,
               {
                 tabelasemjson: 'true',
                 aprovado: 'S',
@@ -998,7 +999,25 @@ async function fetchDetailedAppraisals(unitsRows, situationRows = []) {
             );
             const enrichedTablePayload = await enrichPriceTableWithHtml(tablePayload, table);
             selectedPayloads.push(enrichedTablePayload);
-            for (const [key, value] of collectCommercialDashboardRows(enrichedTablePayload, true, null, table)) {
+            const tableRows = collectCommercialDashboardRows(enrichedTablePayload, true, null, table);
+            // O modo JSON da API retorna preço e disponibilidade, mas omite a
+            // coluna TIPOLOGIA. Para o Azure, consultamos também o relatório
+            // completo (sem tabelasemjson) e cruzamos pelo código da unidade.
+            if (isAzure) {
+              const reportPayload = await cvGetConventional(tableEndpoint, { aprovado: 'S' });
+              const enrichedReport = await enrichPriceTableWithHtml(reportPayload, table);
+              const reportRows = collectCommercialDashboardRows(enrichedReport, true, null, table);
+              for (const [key, reportDetail] of reportRows) {
+                const current = tableRows.get(key);
+                if (current) tableRows.set(key, {
+                  ...current,
+                  sourceRow: reportDetail.sourceRow,
+                  sourceTable: reportDetail.sourceTable,
+                });
+                else tableRows.set(key, reportDetail);
+              }
+            }
+            for (const [key, value] of tableRows) {
               if (!combinedDashboard.has(key)) combinedDashboard.set(key, value);
             }
           }
