@@ -1342,6 +1342,18 @@ function vertexCommercialType(row) {
   ]));
   return raw.includes('varanda') && !raw.includes('semvaranda') ? 'Com varanda' : 'Padrão';
 }
+function azureCommercialType(...rows) {
+  // Não deduzir "Padrão" da ausência da palavra varanda: exigir indicação explícita.
+  for (const row of rows) {
+    if (!row) continue;
+    for (const field of ['tipo_unidade','tipo_unidade_nome','tipounidade','nome_tipologia','tipologia_nome','tipologia','descricao_tipologia','planta','modelo','descricao']) {
+      const value = normKey(pick(row, [field]));
+      if (/semvaranda|padrao/.test(value)) return 'Padrão';
+      if (/comvaranda/.test(value)) return 'Com varanda';
+    }
+  }
+  return '';
+}
 function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedAppraisal = null, dashboardRow = null, preserveBaseIdentity = false) {
   const combined = { ...baseRow, ...situationRow, ...priceRow };
   // Quando o CVCRM publica uma Dashboard comercial para o empreendimento,
@@ -1394,13 +1406,12 @@ function normalizeUnit(baseRow, situationRow = {}, priceRow = {}, detailedApprai
     ), id),
     developmentType: textValue(pick(identitySource, ['tipo_empreendimento'])),
     typology: floorGroupedVertexRow ? vertexFloorLabel(floorSource) : textValue(pick(identitySource, ['bloco','nome_bloco','nomebloco','bloco_nome','torre','tipologia','nome_tipologia','tipologia_nome','tipo_unidade','tipo_unidade_nome','tipounidade','produto','planta','modelo','descricao_tipologia'])),
-    // Vertex Fraga Maia e Azure são organizados apenas por andar, sem subdivisão
-    // comercial entre Padrão e Com varanda.
-    commercialType: floorGroupedVertexRow
-      && !isVertexFragaMaiaUnit(baseRow)
-      && !isAzureFragaMaiaUnit(baseRow)
-      ? vertexCommercialType(baseRow)
-      : '',
+    // Azure: separar somente quando a tipologia estiver explicitamente identificada.
+    commercialType: isAzureFragaMaiaUnit(baseRow)
+      ? azureCommercialType(dashboardRow?.sourceRow, baseRow)
+      : floorGroupedVertexRow && !isVertexFragaMaiaUnit(baseRow)
+        ? vertexCommercialType(baseRow)
+        : '',
     stage: textValue(pick(identitySource, ['etapa'])),
     bedrooms: intValue(pick(identitySource, ['qtde_quartos','quartos','dormitorios','dormitórios','quantidade_quartos','qtdequartos'])),
     suites: intValue(pick(identitySource, ['qtde_suites','suites','suítes','quantidade_suites'])),
