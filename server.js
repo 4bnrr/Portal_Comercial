@@ -1343,14 +1343,14 @@ function vertexCommercialType(row) {
   return raw.includes('varanda') && !raw.includes('semvaranda') ? 'Com varanda' : 'Padrão';
 }
 function azureCommercialType(...rows) {
-  // Não deduzir "Padrão" da ausência da palavra varanda: exigir indicação explícita.
+  // A descrição comercial do Azure vem da tabela de preços e os nomes dos
+  // campos variam entre as tabelas. Por isso lemos todos os valores da linha,
+  // sem depender de uma coluna específica, mas exigindo indicação explícita.
   for (const row of rows) {
     if (!row) continue;
-    for (const field of ['tipo_unidade','tipo_unidade_nome','tipounidade','nome_tipologia','tipologia_nome','tipologia','descricao_tipologia','planta','modelo','descricao']) {
-      const value = normKey(pick(row, [field]));
-      if (/semvaranda|padrao/.test(value)) return 'Padrão';
-      if (/comvaranda|varanda/.test(value) && !/semvaranda/.test(value)) return 'Com varanda';
-    }
+    const value = normKey(Object.values(row).filter(item => item !== null && item !== undefined).join(' '));
+    if (/semvaranda|padrao/.test(value)) return 'Padrão';
+    if (/comvaranda|varanda/.test(value) && !/semvaranda/.test(value)) return 'Com varanda';
   }
   return '';
 }

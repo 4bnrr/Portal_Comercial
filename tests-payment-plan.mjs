@@ -78,6 +78,7 @@ assert.match(serverSource,/const eligibleTables = approvedTables/,'Uma tabela ap
 assert.match(serverSource,/aprovado:\s*'S'/,'As consultas de tabelas devem solicitar explicitamente somente registros aprovados.');
 assert.match(serverSource,/sourceRow:\s*row/,'A tabela mensal deve preservar o número comercial da unidade para calcular o andar.');
 assert.match(serverSource,/const floorSource = azureTableDriven[\s\S]*dashboardRow\.sourceRow[\s\S]*: baseRow/,'O Azure deve calcular o andar pelo número comercial da tabela, não pelo ID interno do CVDW.');
+assert.match(serverSource,/Object\.values\(row\)[\s\S]*comvaranda\|varanda/,'O Azure deve identificar Padrão e Com varanda a partir dos dados completos da tabela de preços.');
 assert.match(serverSource,/a_partir_data_referencia:\s*incrementalSince/,'As consultas frequentes devem solicitar apenas registros alterados desde a última sincronização.');
 assert.match(serverSource,/Carga incremental falhou:[\s\S]*Executando carga completa/,'Uma falha incremental deve acionar automaticamente a carga completa.');
 assert.match(serverSource,/lastFullSuccess[\s\S]*CVDW_FULL_SYNC_INTERVAL_MS/,'A carga completa diária deve permanecer registrada no catálogo.');
