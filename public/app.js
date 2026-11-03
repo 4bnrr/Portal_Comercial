@@ -192,7 +192,13 @@ function varandaCategory(u){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toUpperCase();
 
-  if(enterprise.includes('AZURE FRAGA MAIA')) return String(u.commercialType||'Não identificada').trim()||'Não identificada';
+  if(enterprise.includes('AZURE FRAGA MAIA')){
+    const type=String(u.commercialType||'').trim();
+    const raw=String([type,u.tableName,u.typology].filter(Boolean).join(' ')).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(/padrao|sem\s*varanda/.test(raw)) return 'Padrão';
+    if(/varanda/.test(raw)) return 'Com varanda';
+    return '';
+  }
 
   // VERTEX/AZURE: cada pavimento é uma tipologia comercial independente.
   // No Azure, o CVCRM informa "BLOCO" como tipologia, mas o andar está no
@@ -312,6 +318,15 @@ function enterpriseVarandaMinimumRows(){
     return (a._categoryOrder??order[a._kind]??99)-(b._categoryOrder??order[b._kind]??99) || Number(a.price)-Number(b.price);
   });
 }
+function azureFloorLabel(u){
+  const code=String(u.code||'');
+  const match=code.match(/(\d+)\s*$/);
+  if(match){const floor=Math.floor(Number(match[1])/100);return floor===0?'Térreo':`${floor}º andar`;}
+  const configured=String(u.typology||'').trim();
+  if(/^(térreo|terreo|\d+º andar)$/i.test(configured)) return configured;
+  const floor=Number(u.floor);
+  return u.floor!==null&&u.floor!==undefined&&Number.isInteger(floor)&&floor>=0?(floor===0?'Térreo':`${floor}º andar`):'Andar não identificado';
+}
 function commercialRowLabel(r){return String(r._displayLabel||enterpriseDisplayName(r.enterpriseName)||'')}
 function isVertexCommercialRow(r){
   const enterprise=normalizeEnterpriseName(r?.enterpriseName);
@@ -328,7 +343,7 @@ function isAzureFragaMaia(r){
 }
 function vertexCommercialTypeLabel(r){
   if(isVertexFragaMaia(r)) return '';
-  if(isAzureFragaMaia(r)) return String(r?.commercialType||'Não identificada').trim()||'Não identificada';
+  if(isAzureFragaMaia(r)) return varandaCategory(r);
   return String(r?.commercialType||'Padrão').trim()||'Padrão';
 }
 function vertexCommercialDisplayName(enterpriseName,type){
@@ -370,7 +385,7 @@ function renderTable(){
     const r=entry.row;
     const detailId=`vertexTypologyDetails-${entryIndex}`;
     return `<tr class="vertex-summary-row"><td><b>${escapeHtml(entry.enterpriseName)}</b></td><td><b>${fmtBRL(r.price)}</b></td><td><b>${Number(r.appraisal)>0?fmtBRL(r.appraisal):'—'}</b></td><td><button class="btn secondary btn-small vertex-typology-toggle" type="button" data-target="${detailId}" aria-expanded="false">Simular ↓</button></td></tr>
-      <tr id="${detailId}" class="vertex-detail-row" hidden><td colspan="4"><div class="vertex-detail-panel"><div class="vertex-detail-heading"><b>${escapeHtml(entry.enterpriseName)}</b><small>Escolha uma tipologia para simular</small></div><div class="vertex-detail-table-wrap"><table class="vertex-detail-table"><thead><tr><th>Tipologia</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${entry.rows.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item))}</b></td><td><b>${fmtBRL(item.price)}</b></td><td><b>${Number(item.appraisal)>0?fmtBRL(item.appraisal):'—'}</b></td><td><a class="btn secondary btn-small" href="#simulador">Simular →</a></td></tr>`).join('')}</tbody></table></div></div></td></tr>`;
+      <tr id="${detailId}" class="vertex-detail-row" hidden><td colspan="4"><div class="vertex-detail-panel"><div class="vertex-detail-heading"><b>${escapeHtml(entry.enterpriseName)}</b><small>Escolha um andar para simular</small></div><div class="vertex-detail-table-wrap"><table class="vertex-detail-table"><thead><tr><th>Tipologia</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${entry.rows.map(item=>`<tr><td><b>${escapeHtml(isAzureFragaMaia(item)?azureFloorLabel(item):varandaCategory(item))}</b></td><td><b>${fmtBRL(item.price)}</b></td><td><b>${Number(item.appraisal)>0?fmtBRL(item.appraisal):'—'}</b></td><td><a class="btn secondary btn-small" href="#simulador">Simular →</a></td></tr>`).join('')}</tbody></table></div></div></td></tr>`;
   }).join('');
   area.innerHTML=`<div class="price-table-head"><p class="meta"><b>${visibleEntries.length.toLocaleString('pt-BR')}</b> opções comerciais resumidas</p><span class="price-table-caption">Menores valores disponíveis</span></div>${visibleEntries.length?`<div class="table-wrap table-wrap-refined"><table class="data-table price-table"><thead><tr><th>Empreendimento</th><th>Valor de venda</th><th>Valor da avaliação</th><th>Simular</th></tr></thead><tbody>${body}</tbody></table></div>`:'<div class="empty">Nenhuma opção disponível encontrada.</div>'}`;
   document.querySelectorAll('.vertex-typology-toggle').forEach(button=>button.addEventListener('click',e=>{
@@ -593,7 +608,7 @@ function renderSimulationResults(results){
       <button class="sim-vertex-modal-backdrop" type="button" data-vertex-modal-close aria-label="Fechar tipologias"></button>
       <section class="sim-vertex-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="${detailId}-title">
         <div class="sim-vertex-modal-head"><div><span class="eyebrow">tipologias disponíveis</span><h3 id="${detailId}-title">${escapeHtml(enterpriseName)}</h3><small>Somente andares com unidades disponíveis para venda.</small></div><button class="sim-vertex-modal-close" type="button" data-vertex-modal-close aria-label="Fechar">×</button></div>
-        <div class="sim-vertex-table-wrap"><table class="sim-vertex-table"><thead><tr><th>Tipologia</th><th>Venda</th><th>Avaliação</th><th>Entrada</th><th>Ações</th></tr></thead><tbody>${vertexResults.map(item=>`<tr><td><b>${escapeHtml(varandaCategory(item.result.unit)||commercialRowLabel(item.result.unit))}</b></td><td>${fmtBRL(item.result.sale)}</td><td>${item.result.appraisal?fmtBRL(item.result.appraisal):'—'}</td><td><b class="sim-vertex-entry-value">${fmtBRL(item.result.entry)}</b></td><td><div class="sim-vertex-row-actions"><button class="btn primary btn-small" type="button" data-plan-sim="${item.index}">Simular</button><label class="sim-compare-option"><input type="checkbox" data-compare-sim="${item.index}"><span>Comparar</span></label></div></td></tr>`).join('')}</tbody></table></div>
+        <div class="sim-vertex-table-wrap"><table class="sim-vertex-table"><thead><tr><th>Tipologia</th><th>Venda</th><th>Avaliação</th><th>Entrada</th><th>Ações</th></tr></thead><tbody>${vertexResults.map(item=>`<tr><td><b>${escapeHtml((isAzureFragaMaia(item.result.unit)?azureFloorLabel(item.result.unit):varandaCategory(item.result.unit))||commercialRowLabel(item.result.unit))}</b></td><td>${fmtBRL(item.result.sale)}</td><td>${item.result.appraisal?fmtBRL(item.result.appraisal):'—'}</td><td><b class="sim-vertex-entry-value">${fmtBRL(item.result.entry)}</b></td><td><div class="sim-vertex-row-actions"><button class="btn primary btn-small" type="button" data-plan-sim="${item.index}">Simular</button><label class="sim-compare-option"><input type="checkbox" data-compare-sim="${item.index}"><span>Comparar</span></label></div></td></tr>`).join('')}</tbody></table></div>
       </section>
     </div>`;
   }).join('');
