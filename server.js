@@ -641,7 +641,12 @@ function parsePriceTableHtml(html) {
         .map(match => decodeHtmlCell(match[2]));
       if (!cells.length) continue;
       const isHeader = /<th\b/i.test(tr);
-      if (isHeader) {
+      // A planilha HTML do CVCRM usa <td> no cabeçalho em alguns modelos.
+      // Identificamos a linha pelos campos obrigatórios, em vez de depender
+      // da tag visual usada no relatório.
+      const rowLooksLikeHeader = cells.some(cell => normKey(cell) === 'unidade')
+        && cells.some(cell => ['tipologia', 'areaprivativa', 'valordevenda1x'].includes(normKey(cell)));
+      if (isHeader || rowLooksLikeHeader) {
         headers = cells;
         continue;
       }
@@ -675,6 +680,7 @@ function priceTableExportLinks(payload) {
 
 async function enrichPriceTableWithHtml(payload, table) {
   const links = priceTableExportLinks(payload);
+  if (links.length) console.log(`[CVCRM] Tabela ${priceTableId(table)}: ${links.length} relatório(s) detalhado(s) disponível(is).`);
   if (!links.length) return payload;
   for (const rawLink of links) {
     try {
