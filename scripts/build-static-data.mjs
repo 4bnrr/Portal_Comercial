@@ -157,7 +157,7 @@ function withFloorTypology(unit) {
     ...unit,
     floor,
     typology: floor === 0 ? 'Térreo' : `${floor}º andar`,
-    commercialType: isAzure || enterprise.includes('vertexfragamaia')
+    commercialType: enterprise.includes('vertexfragamaia')
       ? ''
       : unit.commercialType,
   };
