@@ -99,6 +99,16 @@ assert.equal(
   false,
   'A configuração temporária de visibilidade do Vertex Fraga Maia deve permanecer desativada.'
 );
+assert.equal(
+  publishedCatalog.enterpriseMedia.residencialvertexfragamaia?.url,
+  'https://estacao1construtora.com.br/imovel/vertex-prime-fraga-maia/',
+  'O botão Ver detalhes do Vertex Fraga Maia deve abrir a página oficial do empreendimento.'
+);
+assert.equal(
+  publishedCatalog.enterpriseMedia.azurefragamaia?.url,
+  'https://estacao1construtora.com.br/imovel/azure-fraga-maia/',
+  'O botão Ver detalhes do Azure deve abrir a página oficial do empreendimento.'
+);
 assert.match(portalApp,/vertexFragaMaiaVisible:\s*false/,'A flag deve iniciar desligada quando a Vercel estiver indisponível.');
 assert.match(portalApp,/api\/public-config/,'O portal deve consultar a configuração pública da Vercel.');
 
