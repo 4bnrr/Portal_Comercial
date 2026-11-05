@@ -88,6 +88,11 @@ assert.match(serverSource,/lastFullSuccess[\s\S]*CVDW_FULL_SYNC_INTERVAL_MS/,'A 
 assert.match(syncWorkflow,/cron:\s*"2,17,32,47 \* \* \* \*"/,'O CVCRM deve ser consultado a cada 15 minutos.');
 assert.match(syncWorkflow,/CVDW_FULL_SYNC_INTERVAL_HOURS:\s*["']?24["']?/,'O workflow deve realizar uma carga completa a cada 24 horas.');
 assert.match(portalApp,/AZURE FRAGA MAIA/,'O portal deve tratar o Azure como empreendimento agrupado por andar.');
+assert.match(
+  portalApp,
+  /function enterpriseAndTypologyLabels[\s\S]*isAzureFragaMaia[\s\S]*enterpriseName:vertexCommercialDisplayName[\s\S]*typology:azureFloorLabel/,
+  'Na impressão, o Azure deve exibir Padrão/Com varanda no empreendimento e o andar na tipologia.'
+);
 assert.match(portalApp,/const cat=isAzureFragaMaia\(u\)\?azureFloorLabel\(u\):varandaCategory\(u\);/,'O Azure deve preservar cada andar dentro dos grupos Padrão e Com varanda.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),

@@ -329,6 +329,22 @@ function azureFloorLabel(u){
   const floor=Number(u.floor);
   return u.floor!==null&&u.floor!==undefined&&Number.isInteger(floor)&&floor>=0?(floor===0?'Térreo':`${floor}º andar`):'Andar não identificado';
 }
+function enterpriseAndTypologyLabels(unit){
+  if(!unit)return {enterpriseName:'—',typology:'—'};
+  const category=varandaCategory(unit);
+  if(isAzureFragaMaia(unit)){
+    return {
+      enterpriseName:vertexCommercialDisplayName(unit.enterpriseName,vertexCommercialTypeLabel(unit)),
+      typology:azureFloorLabel(unit)
+    };
+  }
+  return {
+    enterpriseName:enterpriseDisplayName(unit.enterpriseName),
+    typology:category
+      ? category.charAt(0).toUpperCase()+category.slice(1).replace('-', ' ')
+      : (unit.developmentType?.toLowerCase().includes('casa')?'Casa':'Não especificada')
+  };
+}
 function commercialRowLabel(r){return String(r._displayLabel||enterpriseDisplayName(r.enterpriseName)||'')}
 function isVertexCommercialRow(r){
   const enterprise=normalizeEnterpriseName(r?.enterpriseName);
@@ -753,6 +769,7 @@ function printSimulation(){
   const clientName=String(first.clientName||document.querySelector('#clientName')?.value||'').trim();
   const financingApproved=Math.max(0,Number(first.financingApproved||0));
   const subsidy=Math.max(0,Number(first.subsidy||0));
+  const firstLabels=enterpriseAndTypologyLabels(first.unit);
 
   let sheet=document.querySelector('#simPrintSheet');
   if(!sheet){
@@ -762,14 +779,11 @@ function printSimulation(){
   }
 
   const rows=results.map((r,i)=>{
-    const category=varandaCategory(r.unit);
-    const typology=category
-      ? category.charAt(0).toUpperCase()+category.slice(1).replace('-', ' ')
-      : (r.unit?.developmentType?.toLowerCase().includes('casa')?'Casa':'—');
+    const {enterpriseName,typology}=enterpriseAndTypologyLabels(r.unit);
     const totalApproved=Math.max(0,Number(r.financingEffective||0))+Math.max(0,Number(r.subsidy||0));
     return `<tr>
       <td>${String(i+1).padStart(2,'0')}</td>
-      <td><b>${escapeHtml(r.unit?enterpriseDisplayName(r.unit.enterpriseName):'—')}</b></td>
+      <td><b>${escapeHtml(enterpriseName)}</b></td>
       <td>${escapeHtml(typology)}</td>
       <td>${fmtBRL(r.sale)}</td>
       <td>${r.appraisal?fmtBRL(r.appraisal):'—'}</td>
@@ -798,7 +812,7 @@ function printSimulation(){
       <div><span>Subsídio</span><b>${fmtBRL(subsidy)}</b></div>
     </div>
 
-    ${enterpriseOfficialUrl(first.unit?.enterpriseName)?`<div class="sim-print-best"><div><span>Melhor entrada encontrada</span><b>${escapeHtml(commercialRowLabel(first.unit))} • ${fmtBRL(first.entry)}</b></div><div><img src="/api/qr?text=${encodeURIComponent(enterpriseOfficialUrl(first.unit.enterpriseName))}" alt="QR Code"><small>Detalhes do empreendimento</small></div></div>`:''}
+    ${enterpriseOfficialUrl(first.unit?.enterpriseName)?`<div class="sim-print-best"><div><span>Melhor entrada encontrada</span><b>${escapeHtml(firstLabels.enterpriseName)} • ${escapeHtml(firstLabels.typology)} • ${fmtBRL(first.entry)}</b></div><div><img src="/api/qr?text=${encodeURIComponent(enterpriseOfficialUrl(first.unit.enterpriseName))}" alt="QR Code"><small>Detalhes do empreendimento</small></div></div>`:''}
     <div class="sim-print-section-title">
       <span>Todas as opções calculadas</span>
       <b>${results.length.toLocaleString('pt-BR')} possibilidades</b>
@@ -855,14 +869,15 @@ function renderPaymentPlan(){
   if(!ctx.sale){area.innerHTML='<div class="empty"><b>Valor do imóvel indisponível.</b><p>Não é possível montar o Plano de Pagamento sem o valor de venda da opção selecionada.</p></div>';return}
   if(!ctx.appraisal){area.innerHTML='<div class="plan-alert error"><b>Valor de avaliação não identificado.</b><p>O Plano de Pagamento exige o VALOR DO IMÓVEL (1x) da tabela detalhada para validar o limite de financiamento de 80%.</p></div>';return}
   const category=varandaCategory(u);
-  const typology=category || (u.developmentType?.toLowerCase().includes('casa')?'Casa':'Não especificada');
+  const labels=enterpriseAndTypologyLabels(u);
+  const typology=labels.typology;
   const rule=selectPaymentRule(paymentPlanRules,{enterpriseName:u.enterpriseName,typology:`${category} ${u.typology||''}`,developmentType:u.developmentType||''});
   const r=calculatePaymentPlan(ctx,rule);
   const blocked=r.remunerationExceedsLimit;
   const status=blocked?'OPERAÇÃO BLOQUEADA':r.status;
   const ownMsg=r.ownResourcesMinimum>0?`O cliente deverá pagar no mínimo ${fmtBRL(r.ownResourcesMinimum)} com recursos próprios. O saldo poderá ser estruturado dentro da capacidade do Plano de Pagamento.`:'A entrada gerada está integralmente dentro da capacidade do Plano de Pagamento.';
   const fixed=rule.remunerationType==='fixed';
-  const displayName=enterpriseDisplayName(u.enterpriseName);
+  const displayName=labels.enterpriseName;
   area.innerHTML=`<div class="plan-shell plan-shell-refined"><div class="plan-head plan-head-refined"><div><div class="eyebrow">plano de pagamento</div><h2>${escapeHtml(displayName)}</h2><p>${typology==='Não especificada'?'':escapeHtml(typology)}</p></div><span class="plan-status ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}">${escapeHtml(status)}</span></div>${blocked?'<div class="plan-alert error"><b>A remuneração cadastrada ultrapassa o limite máximo de risco da operação.</b><p>A conclusão do Plano de Pagamento foi bloqueada.</p></div>':''}<div class="plan-grid plan-grid-refined"><div><small>Empreendimento</small><b>${escapeHtml(displayName)}</b></div><div><small>Tipologia</small><b>${escapeHtml(typology)}</b></div><div><small>Valor do imóvel</small><b>${fmtBRL(r.sale)}</b></div><div><small>Valor da avaliação</small><b>${fmtBRL(r.appraisal)}</b></div><div><small>Financiamento + Subsídio</small><b>${fmtBRL(Math.max(0,r.financingEffective+r.subsidy))}</b></div><div><small>Financiamento efetivo</small><b>${fmtBRL(r.financingEffective)}</b></div><div><small>Subsídio</small><b>${fmtBRL(r.subsidy)}</b></div><div class="plan-kpi plan-kpi-entry"><small>Entrada gerada</small><b>${fmtBRL(r.entryRequired)}</b></div><div class="plan-kpi"><small>Limite total de risco</small><b>${fmtBRL(r.maxPlanCapacity)}</b></div><div><small>Comissão da imobiliária</small><b>${fixed?'Fixa • ':''}${fmtBRL(r.realEstateCommission)}</b></div><div><small>Remuneração da coordenação</small><b>${pctBR(rule.coordinationPercent||0)} • ${fmtBRL(r.coordination)}</b></div><div><small>Risco disponível para a construtora</small><b>${fmtBRL(r.builderRisk)}</b></div><div class="plan-kpi plan-kpi-own"><small>Recurso próprio mínimo</small><b>${fmtBRL(r.ownResourcesMinimum)}</b></div><div><small>Regra aplicada</small><b>${escapeHtml(r.ruleName)}</b></div></div><div class="plan-summary ${blocked?'blocked':r.ownResourcesMinimum>0?'warning':'ok'}"><div><small>Status final da operação</small><strong>${escapeHtml(status)}</strong></div><p>${blocked?`A operação não pode ser concluída enquanto a parametrização de remuneração ultrapassar o teto global de ${Number(r.totalRiskPercent).toLocaleString('pt-BR',{maximumFractionDigits:3})}%.`:escapeHtml(ownMsg)}</p></div><div class="plan-note"><b>Validação do financiamento:</b> limite de 80% da avaliação = ${fmtBRL(r.appraisalFinancingLimit)}. O Plano de Pagamento utiliza ${fmtBRL(r.financingEffective)} como financiamento efetivo e nunca ultrapassa esse teto.</div><div class="buttons plan-print-actions"><button class="btn secondary" type="button" onclick="printPaymentPlan()">Imprimir / Salvar PDF</button></div></div>`;
 }
 
@@ -875,7 +890,8 @@ function printPaymentPlan(){
   }
 
   const category=varandaCategory(u);
-  const typology=category || (u.developmentType?.toLowerCase().includes('casa')?'Casa':'Não especificada');
+  const labels=enterpriseAndTypologyLabels(u);
+  const typology=labels.typology;
   const rule=selectPaymentRule(paymentPlanRules,{
     enterpriseName:u.enterpriseName,
     typology:`${category} ${u.typology||''}`,
@@ -907,7 +923,7 @@ function printPaymentPlan(){
 
     <div class="print-title">
       <span>Plano de Pagamento</span>
-      <h1>${escapeHtml(enterpriseDisplayName(u.enterpriseName))}</h1>
+      <h1>${escapeHtml(labels.enterpriseName)}</h1>
       ${typology==='Não especificada'?'':`<p>${escapeHtml(typology)}</p>`}
     </div>
 
