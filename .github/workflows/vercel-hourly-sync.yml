@@ -7,6 +7,12 @@ on:
 
   # Permite iniciar manualmente pelo GitHub Actions.
   workflow_dispatch:
+    inputs:
+      force_full_sync:
+        description: "Forçar leitura completa de todas as tabelas"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -46,6 +52,7 @@ jobs:
           CVCRM_REQUEST_GAP_MS: "3200"
           CVCRM_PHASE_GAP_MS: "0"
           CVCRM_AUTO_SYNC: "false"
+          CVCRM_FORCE_FULL_SYNC: ${{ inputs.force_full_sync || 'false' }}
 
           CVDW_INCREMENTAL_OVERLAP_MS: "600000"
           CVDW_FULL_SYNC_INTERVAL_HOURS: "24"
