@@ -18,6 +18,15 @@ assert.equal(s.entryRequired,32000);
 assert.equal(s.ownResourcesMinimum,5000);
 assert.equal(s.realEstateCommission,7000);
 assert.equal(s.builderRisk,20000);
+assert.equal(s.financingSystem,'PRICE');
+assert.equal(s.maxFinancingPercent,80);
+
+const sac=calculatePaymentPlan({...baseInput,financingApproved:200000,maxFinancingPercent:90,financingSystem:'SAC'},standard);
+assert.equal(sac.financingSystem,'SAC');
+assert.equal(sac.maxFinancingPercent,90);
+assert.equal(sac.appraisalFinancingLimit,189000);
+assert.equal(sac.financingEffective,189000);
+assert.equal(sac.entryRequired,11000);
 
 const a=calculatePaymentPlan(baseInput,atlanta);
 assert.equal(a.maxPlanCapacity,27000);
@@ -116,6 +125,10 @@ assert.equal(
 );
 assert.match(portalApp,/vertexFragaMaiaVisible:\s*false/,'A flag deve iniciar desligada quando a Vercel estiver indisponível.');
 assert.match(portalApp,/api\/public-config/,'O portal deve consultar a configuração pública da Vercel.');
+assert.match(portalApp,/name="financingSystem" value="PRICE" data-max-financing-percent="80" required/,'PRICE deve ser uma opção obrigatória com limite de 80%.');
+assert.match(portalApp,/name="financingSystem" value="SAC" data-max-financing-percent="90" required/,'SAC deve ser uma opção obrigatória com limite de 90%.');
+assert.match(portalApp,/input\[name="financingSystem"\]:checked/,'PRICE e SAC devem compartilhar uma seleção exclusiva.');
+assert.match(portalApp,/Selecione PRICE ou SAC antes de gerar as possibilidades/,'O simulador deve bloquear o cálculo sem uma opção de financiamento.');
 
 console.log('OK — Regra padrão:', {limite:s.maxPlanCapacity, entrada:s.entryRequired, recursoProprio:s.ownResourcesMinimum, imobiliaria:s.realEstateCommission, construtora:s.builderRisk});
 console.log('OK — Atlanta:', {comissao:a.realEstateCommission, coordenacao:a.coordination, construtora:a.builderRisk, total:a.realEstateCommission+a.coordination+a.builderRisk});

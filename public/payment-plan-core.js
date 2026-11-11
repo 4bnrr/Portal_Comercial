@@ -47,6 +47,7 @@ export function calculatePaymentPlan(input, rule) {
   const financingApproved = Math.max(0, Number(input?.financingApproved) || 0);
   const subsidy = Math.max(0, Number(input?.subsidy) || 0);
   const maxFinancingPercent = Math.max(0, Number(input?.maxFinancingPercent) || 80);
+  const financingSystem = String(input?.financingSystem || (maxFinancingPercent === 90 ? 'SAC' : 'PRICE')).toUpperCase();
 
   const appraisalFinancingLimit = appraisal > 0 ? appraisal * (maxFinancingPercent / 100) : 0;
   const financingEffective = appraisal > 0
@@ -80,7 +81,7 @@ export function calculatePaymentPlan(input, rule) {
 
   return {
     sale, appraisal, financingApproved, financingEffective, subsidy,
-    maxFinancingPercent, appraisalFinancingLimit, entryRequired,
+    maxFinancingPercent, financingSystem, appraisalFinancingLimit, entryRequired,
     totalRiskPercent, maxPlanCapacity, remunerationType,
     realEstateCommission, coordination, builderRisk,
     ownResourcesMinimum, status, remunerationExceedsLimit,

@@ -417,9 +417,28 @@ footer{border-top:1px solid var(--line);padding:28px 0;background:#fff}
 .sim-horizontal-fields .field{margin:0}
 .sim-horizontal-actions{
   display:flex;
-  justify-content:flex-end;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:18px;
   margin-top:18px;
 }
+.financing-system-choice{min-width:0;margin:0;padding:0;border:0}
+.financing-system-choice legend{margin:0 0 7px;padding:0;color:var(--ink);font-size:12px;font-weight:800}
+.financing-system-choice legend span{color:var(--red)}
+.financing-system-buttons{display:flex;gap:9px}
+.financing-system-button{display:block;min-width:155px;cursor:pointer}
+.financing-system-button input{position:absolute;opacity:0;pointer-events:none}
+.financing-system-button span{display:flex;align-items:center;gap:9px;min-height:48px;padding:9px 14px;border:1px solid #cfd4da;border-radius:11px;background:#fff;transition:border-color .16s ease,box-shadow .16s ease,background .16s ease}
+.financing-system-button b{color:var(--ink);font-size:14px;letter-spacing:.04em}
+.financing-system-button small{color:var(--muted);font-size:10px;line-height:1.2}
+.financing-system-button:hover span{border-color:#aeb5bd}
+.financing-system-button input:focus-visible+span{outline:3px solid rgba(239,0,20,.18);outline-offset:2px}
+.financing-system-button input:checked+span{border-color:var(--red);background:#fff4f5;box-shadow:0 0 0 3px rgba(239,0,20,.09)}
+.financing-system-button input:checked+span b{color:var(--red)}
+.financing-system-help{display:block;margin-top:6px;color:var(--muted);font-size:10px}
+.financing-system-choice.invalid .financing-system-button span{border-color:var(--red)}
+.financing-system-choice.invalid .financing-system-help{color:var(--red);font-weight:700}
+.sim-horizontal-actions .btn[disabled]{cursor:not-allowed;opacity:.5}
 .sim-results-below{
   width:100%;
   min-width:0;
@@ -436,7 +455,11 @@ footer{border-top:1px solid var(--line);padding:28px 0;background:#fff}
 }
 @media (max-width:650px){
   .sim-horizontal-fields{grid-template-columns:1fr}
-  .sim-horizontal-actions{justify-content:stretch}
+  .sim-horizontal-actions{align-items:stretch;flex-direction:column;justify-content:stretch}
+  .financing-system-choice{width:100%}
+  .financing-system-buttons{display:grid;grid-template-columns:1fr 1fr}
+  .financing-system-button{min-width:0}
+  .financing-system-button span{align-items:flex-start;flex-direction:column;gap:2px}
   .sim-horizontal-actions .btn{width:100%}
 }
 
