@@ -271,10 +271,11 @@ function enterpriseVarandaMinimumRows(){
     if(!enterprise) continue;
 
     const vertexType=isVertexCommercialRow(u)?vertexCommercialTypeLabel(u):'';
-    const key=`${enterprise.toLocaleLowerCase('pt-BR')}|${vertexType.toLocaleLowerCase('pt-BR')}`;
+    const commercialStage=isAzureFragaMaia(u)?azureStageLabel(u):'';
+    const key=`${enterprise.toLocaleLowerCase('pt-BR')}|${vertexType.toLocaleLowerCase('pt-BR')}|${commercialStage.toLocaleLowerCase('pt-BR')}`;
     let g=byEnterprise.get(key);
     if(!g){
-      g={enterpriseName:enterprise,commercialType:vertexType,overall:null,categories:new Map()};
+      g={enterpriseName:enterprise,commercialType:vertexType,commercialStage,overall:null,categories:new Map()};
       byEnterprise.set(key,g);
     }
 
@@ -305,7 +306,8 @@ function enterpriseVarandaMinimumRows(){
           _displayLabel:`${g.enterpriseName} • ${cat}`,
           _kind:cat.toLowerCase().replace(/\s+/g,'-'),
           _categoryOrder:commercialCategoryOrder(cat),
-          commercialType:g.commercialType||u.commercialType||''
+          commercialType:g.commercialType||u.commercialType||'',
+          commercialStage:g.commercialStage||''
         });
       }
     }else if(g.overall){
@@ -329,12 +331,18 @@ function azureFloorLabel(u){
   const floor=Number(u.floor);
   return u.floor!==null&&u.floor!==undefined&&Number.isInteger(floor)&&floor>=0?(floor===0?'Térreo':`${floor}º andar`):'Andar não identificado';
 }
+function azureStageLabel(u){
+  if(!isAzureFragaMaia(u))return '';
+  const raw=String(u?.commercialStage||u?.stage||'').trim();
+  const number=raw.match(/(?:etapa\s*)?(\d+)/i)?.[1];
+  return number?`Etapa ${String(Number(number)).padStart(2,'0')}`:raw;
+}
 function enterpriseAndTypologyLabels(unit){
   if(!unit)return {enterpriseName:'—',typology:'—'};
   const category=varandaCategory(unit);
   if(isAzureFragaMaia(unit)){
     return {
-      enterpriseName:vertexCommercialDisplayName(unit.enterpriseName,vertexCommercialTypeLabel(unit)),
+      enterpriseName:vertexCommercialDisplayName(unit.enterpriseName,vertexCommercialTypeLabel(unit),azureStageLabel(unit)),
       typology:azureFloorLabel(unit)
     };
   }
@@ -364,13 +372,14 @@ function vertexCommercialTypeLabel(r){
   if(isAzureFragaMaia(r)) return varandaCategory(r);
   return String(r?.commercialType||'Padrão').trim()||'Padrão';
 }
-function vertexCommercialDisplayName(enterpriseName,type){
+function vertexCommercialDisplayName(enterpriseName,type,stage=''){
   const base=enterpriseDisplayName(enterpriseName);
-  return type?`${base} • ${type}`:base;
+  return [base,type,stage].filter(Boolean).join(' • ');
 }
 function vertexCommercialGroupKey(r){
   const type=vertexCommercialTypeLabel(r);
-  return `${normalizeEnterpriseName(r?.enterpriseName)}|${normalizeEnterpriseName(type)}`;
+  const stage=isAzureFragaMaia(r)?azureStageLabel(r):'';
+  return `${normalizeEnterpriseName(r?.enterpriseName)}|${normalizeEnterpriseName(type)}|${normalizeEnterpriseName(stage)}`;
 }
 function tables(){return pageHead('Consulta comercial','Tabelas de preços','Menor valor disponível por empreendimento e tipologia comercial, com o respectivo valor de avaliação da unidade utilizada como referência.')+`<section class="section prices-section"><div class="container"><div class="price-search-panel"><div class="price-search-copy"><div class="eyebrow">Consulta rápida</div><strong>Encontre um empreendimento</strong><small>Pesquise pelo nome do empreendimento ou pela tipologia exibida.</small></div><div class="filters price-filters"><input id="q" class="input price-search-input" placeholder="Buscar empreendimento"></div></div><div id="tableArea"></div></div></section>`}
 function renderTable(){
@@ -382,13 +391,14 @@ function renderTable(){
     const vertexGroups=new Map();
     for(const row of vertexRows){
       const type=vertexCommercialTypeLabel(row);
+      const stage=isAzureFragaMaia(row)?azureStageLabel(row):'';
       const key=vertexCommercialGroupKey(row);
-      if(!vertexGroups.has(key)) vertexGroups.set(key,{type,enterpriseName:row.enterpriseName,rows:[]});
+      if(!vertexGroups.has(key)) vertexGroups.set(key,{type,stage,enterpriseName:row.enterpriseName,rows:[]});
       vertexGroups.get(key).rows.push(row);
     }
-    for(const {type,enterpriseName,rows} of vertexGroups.values()){
+    for(const {type,stage,enterpriseName,rows} of vertexGroups.values()){
       const reference=rows.slice().sort((a,b)=>Number(a.price)-Number(b.price))[0];
-      entries.push({kind:'vertex',row:reference,rows,commercialType:type,enterpriseName:vertexCommercialDisplayName(enterpriseName,type)});
+      entries.push({kind:'vertex',row:reference,rows,commercialType:type,commercialStage:stage,enterpriseName:vertexCommercialDisplayName(enterpriseName,type,stage)});
     }
   }
   const visibleEntries=entries
@@ -639,8 +649,9 @@ function renderSimulationResults(results){
     renderedVertexGroups.add(groupKey);
     const vertexResults=vertexGroups.get(groupKey)||[];
     const reference=vertexResults[0];
-    const detailId=`simVertexModal-${normalizeEnterpriseName(result.unit.enterpriseName)}-${normalizeEnterpriseName(type)||'geral'}`;
-    const displayName=vertexCommercialDisplayName(reference.result.unit.enterpriseName,type);
+    const stage=isAzureFragaMaia(result.unit)?azureStageLabel(result.unit):'';
+    const detailId=`simVertexModal-${normalizeEnterpriseName(result.unit.enterpriseName)}-${normalizeEnterpriseName(type)||'geral'}-${normalizeEnterpriseName(stage)||'unica'}`;
+    const displayName=vertexCommercialDisplayName(reference.result.unit.enterpriseName,type,stage);
     return `<article class="sim-result-card sim-vertex-summary-card">
       <div class="sim-result-top">
         <div><span class="sim-result-index">VERTEX</span><h3>${escapeHtml(displayName)}</h3></div>
@@ -659,8 +670,9 @@ function renderSimulationResults(results){
   const vertexModals=[...vertexGroups.values()].map(vertexResults=>{
     const reference=vertexResults[0];
     const type=vertexCommercialTypeLabel(reference.result.unit);
-    const enterpriseName=vertexCommercialDisplayName(reference.result.unit.enterpriseName,type);
-    const detailId=`simVertexModal-${normalizeEnterpriseName(reference.result.unit.enterpriseName)}-${normalizeEnterpriseName(type)||'geral'}`;
+    const stage=isAzureFragaMaia(reference.result.unit)?azureStageLabel(reference.result.unit):'';
+    const enterpriseName=vertexCommercialDisplayName(reference.result.unit.enterpriseName,type,stage);
+    const detailId=`simVertexModal-${normalizeEnterpriseName(reference.result.unit.enterpriseName)}-${normalizeEnterpriseName(type)||'geral'}-${normalizeEnterpriseName(stage)||'unica'}`;
     return `<div id="${detailId}" class="sim-vertex-modal" hidden>
       <button class="sim-vertex-modal-backdrop" type="button" data-vertex-modal-close aria-label="Fechar tipologias"></button>
       <section class="sim-vertex-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="${detailId}-title">

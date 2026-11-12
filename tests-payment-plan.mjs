@@ -61,6 +61,10 @@ const availableFragaUnits=publishedCatalog.catalog.units.filter(unit=>String(uni
 assert.ok(availableFragaUnits.length>0,'O catálogo deve preservar as unidades do Vertex Fraga Maia para a flag da Vercel.');
 const availableAzureUnits=publishedCatalog.catalog.units.filter(unit=>String(unit.enterpriseId)==='124'&&unit.status==='disponivel');
 assert.ok(availableAzureUnits.length>0,'O catálogo deve publicar as unidades disponíveis do Azure Fraga Maia.');
+assert.ok(
+  availableAzureUnits.every(unit=>['Padrão','Com varanda'].includes(unit.commercialType)&&/^ETAPA 0[12]$/i.test(String(unit.stage||''))),
+  'Cada unidade disponível do Azure deve informar a tipologia e a etapa usadas no agrupamento comercial.'
+);
 assert.equal(
   Math.min(...availableAzureUnits.filter(unit=>Number(unit.price)>0).map(unit=>Number(unit.price))),
   publishedCatalog.catalog.enterprises.find(enterprise=>String(enterprise.id)==='124')?.lowestPrice,
@@ -103,6 +107,8 @@ assert.match(
   'Na impressão, o Azure deve exibir Padrão/Com varanda no empreendimento e o andar na tipologia.'
 );
 assert.match(portalApp,/const cat=isAzureFragaMaia\(u\)\?azureFloorLabel\(u\):varandaCategory\(u\);/,'O Azure deve preservar cada andar dentro dos grupos Padrão e Com varanda.');
+assert.match(portalApp,/const commercialStage=isAzureFragaMaia\(u\)\?azureStageLabel\(u\):'';/,'O agrupamento do Azure deve separar as etapas 01 e 02.');
+assert.match(portalApp,/return \[base,type,stage\]\.filter\(Boolean\)\.join\(' • '\);/,'O nome comercial do Azure deve exibir tipologia e etapa.');
 assert.equal(
   publishedCatalog.catalog.enterprises.some(enterprise=>String(enterprise.id)==='123'),
   true,
